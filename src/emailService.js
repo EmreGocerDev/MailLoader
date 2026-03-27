@@ -359,6 +359,31 @@ class EmailService {
     });
   }
 
+  async deleteMultipleEmails(uids, folder = 'INBOX') {
+    await this._ensureConnected();
+    await this._openBox(folder);
+    return new Promise((resolve, reject) => {
+      this.imap.addFlags(uids, ['\\Deleted'], (err) => {
+        if (err) return reject(err);
+        this.imap.expunge((err2) => {
+          if (err2) return reject(err2);
+          resolve();
+        });
+      });
+    });
+  }
+
+  async getNonFlaggedUids(folder = 'INBOX') {
+    await this._ensureConnected();
+    await this._openBox(folder);
+    return new Promise((resolve, reject) => {
+      this.imap.search([['UNFLAGGED']], (err, uids) => {
+        if (err) return reject(err);
+        resolve(uids || []);
+      });
+    });
+  }
+
   async markAsRead(uid, folder = 'INBOX') {
     await this._ensureConnected();
     await this._openBox(folder);

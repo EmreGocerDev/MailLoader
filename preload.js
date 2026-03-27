@@ -19,6 +19,8 @@ contextBridge.exposeInMainWorld('mailAPI', {
   sendEmail: (data) => ipcRenderer.invoke('send-email', data),
   getFolders: () => ipcRenderer.invoke('get-folders'),
   deleteEmail: (uid, folder) => ipcRenderer.invoke('delete-email', uid, folder),
+  deleteMultipleEmails: (uids, folder) => ipcRenderer.invoke('delete-multiple-emails', uids, folder),
+  deleteNonFavorites: (folder) => ipcRenderer.invoke('delete-non-favorites', folder),
   markRead: (uid, folder) => ipcRenderer.invoke('mark-read', uid, folder),
   markStarred: (uid, starred, folder) => ipcRenderer.invoke('mark-starred', uid, starred, folder),
   searchEmails: (query, folder) => ipcRenderer.invoke('search-emails', query, folder),
@@ -57,5 +59,20 @@ contextBridge.exposeInMainWorld('mailAPI', {
   saveAttachment: (data) => ipcRenderer.invoke('save-attachment', data),
 
   // Sound path resolver
-  getSoundPath: (file) => ipcRenderer.invoke('get-sound-path', file)
+  getSoundPath: (file) => ipcRenderer.invoke('get-sound-path', file),
+
+  // Quick Replies / Templates
+  getQuickReplies: () => ipcRenderer.invoke('get-quick-replies'),
+  saveQuickReply: (reply) => ipcRenderer.invoke('save-quick-reply', reply),
+  removeQuickReply: (id) => ipcRenderer.invoke('remove-quick-reply', id),
+
+  // Google Drive
+  driveSetCredentials: (clientId, clientSecret) => ipcRenderer.invoke('drive-set-credentials', clientId, clientSecret),
+  driveGetCredentials: () => ipcRenderer.invoke('drive-get-credentials'),
+  driveIsConnected: () => ipcRenderer.invoke('drive-is-connected'),
+  driveAuth: () => ipcRenderer.invoke('drive-auth'),
+  driveDisconnect: () => ipcRenderer.invoke('drive-disconnect'),
+  driveListFiles: (folderId) => ipcRenderer.invoke('drive-list-files', folderId),
+  driveUploadFile: (folderId) => ipcRenderer.invoke('drive-upload-file', folderId),
+  driveDownloadFile: (fileId, fileName) => ipcRenderer.invoke('drive-download-file', fileId, fileName)
 });

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https: http: cid: blob:; script-src 'self' 'unsafe-inline'; frame-src *; media-src 'self' file:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https: http: cid: blob:; script-src 'self' 'unsafe-inline'; frame-src *; media-src 'self' file:; connect-src https://www.googleapis.com https://accounts.google.com https://oauth2.googleapis.com">
   <title>MailLoader</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
@@ -193,6 +193,15 @@
 
         <div class="sidebar-divider"></div>
 
+        <div class="folder-item" id="btn-drive-tab">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 19.5h20L12 2z"/><path d="M8.5 19.5L12 13l3.5 6.5"/><path d="M15.5 13H22l-3.5-6.5"/>
+          </svg>
+          <span>Google Drive</span>
+        </div>
+
+        <div class="sidebar-divider"></div>
+
         <div class="folder-section">
           <div class="folder-section-title">Diğer Klasörler</div>
           <div id="other-folders"></div>
@@ -274,14 +283,40 @@
                 <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
               </svg>
             </button>
+            <button class="toolbar-btn" id="btn-settings" title="Ayarlar">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+              </svg>
+            </button>
           </div>
         </div>
 
         <!-- Email List -->
         <div class="email-list-container" id="email-list-view">
           <div class="email-list-header">
-            <span class="folder-title" id="current-folder-title">Gelen Kutusu</span>
-            <span class="email-count" id="email-count"></span>
+            <div class="email-list-header-left">
+              <label class="bulk-checkbox-label" title="Tümünü Seç">
+                <input type="checkbox" id="select-all-checkbox">
+                <span class="custom-checkbox"></span>
+              </label>
+              <span class="folder-title" id="current-folder-title">Gelen Kutusu</span>
+              <span class="email-count" id="email-count"></span>
+            </div>
+            <div class="bulk-actions" id="bulk-actions" style="display:none;">
+              <button class="bulk-btn bulk-btn-danger" id="btn-delete-selected" title="Seçilenleri Sil">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                </svg>
+                <span>Seçilenleri Sil</span>
+              </button>
+              <button class="bulk-btn bulk-btn-warning" id="btn-delete-non-favorites" title="Favoriler Dışındakileri Sil">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+                <span>Favoriler Hariç Sil</span>
+              </button>
+              <span class="bulk-count" id="bulk-count">0 seçili</span>
+            </div>
           </div>
           <div class="email-list" id="email-list">
             <div class="loading-state" id="loading-state">
@@ -344,36 +379,59 @@
           <div class="compose-window">
             <div class="compose-header">
               <h3 id="compose-title">Yeni E-posta</h3>
-              <button class="compose-close" id="btn-compose-close">
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              </button>
-            </div>
-            <div class="compose-body">
-              <div class="compose-field">
-                <label>Kime:</label>
-                <input type="email" id="compose-to" placeholder="alici@ornek.com">
-              </div>
-              <div class="compose-field">
-                <label>CC:</label>
-                <input type="email" id="compose-cc" placeholder="cc@ornek.com">
-              </div>
-              <div class="compose-field">
-                <label>Konu:</label>
-                <input type="text" id="compose-subject" placeholder="Konu">
-              </div>
-              <div class="compose-attachments">
-                <div class="attachment-list" id="compose-attachment-list"></div>
-                <button class="btn-attach" id="btn-attach" type="button">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+              <div class="compose-header-actions">
+                <button class="compose-template-toggle" id="btn-toggle-templates" title="Hazır Yanıtlar">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/>
                   </svg>
-                  Dosya Ekle
+                </button>
+                <button class="compose-close" id="btn-compose-close">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
                 </button>
               </div>
-              <div class="compose-editor">
-                <textarea id="compose-body" placeholder="Mesajınızı yazın..."></textarea>
+            </div>
+            <div class="compose-body-wrapper">
+              <div class="compose-body">
+                <div class="compose-field">
+                  <label>Kime:</label>
+                  <input type="email" id="compose-to" placeholder="alici@ornek.com">
+                </div>
+                <div class="compose-field">
+                  <label>CC:</label>
+                  <input type="email" id="compose-cc" placeholder="cc@ornek.com">
+                </div>
+                <div class="compose-field">
+                  <label>Konu:</label>
+                  <input type="text" id="compose-subject" placeholder="Konu">
+                </div>
+                <div class="compose-attachments">
+                  <div class="attachment-list" id="compose-attachment-list"></div>
+                  <button class="btn-attach" id="btn-attach" type="button">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 01-8.49-8.49l9.19-9.19a4 4 0 015.66 5.66l-9.2 9.19a2 2 0 01-2.83-2.83l8.49-8.48"/>
+                    </svg>
+                    Dosya Ekle
+                  </button>
+                </div>
+                <div class="compose-editor">
+                  <textarea id="compose-body" placeholder="Mesajınızı yazın..."></textarea>
+                </div>
+              </div>
+              <!-- Template Sidebar -->
+              <div class="template-sidebar" id="template-sidebar" style="display:none;">
+                <div class="template-sidebar-header">
+                  <h4>Hazır Yanıtlar</h4>
+                  <button class="template-sidebar-close" id="btn-close-templates">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                    </svg>
+                  </button>
+                </div>
+                <div class="template-sidebar-list" id="template-sidebar-list">
+                  <div class="template-empty">Henüz hazır yanıt yok. Ayarlardan ekleyin.</div>
+                </div>
               </div>
             </div>
             <div class="compose-footer">
@@ -517,6 +575,131 @@
       <div class="contact-dialog-buttons">
         <button class="btn-secondary" id="contact-dialog-cancel">İptal</button>
         <button class="btn-primary" id="contact-dialog-save">Kaydet</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Google Drive Panel -->
+  <div class="drive-panel-overlay" id="drive-panel-overlay" style="display:none;">
+    <div class="drive-panel">
+      <div class="drive-panel-header">
+        <h3>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2L2 19.5h20L12 2z"/><path d="M8.5 19.5L12 13l3.5 6.5"/><path d="M15.5 13H22l-3.5-6.5"/>
+          </svg>
+          Google Drive
+        </h3>
+        <button class="compose-close" id="btn-drive-close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="drive-panel-body">
+        <!-- Not connected state -->
+        <div class="drive-not-connected" id="drive-not-connected">
+          <div class="drive-setup-msg">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="1.5">
+              <path d="M12 2L2 19.5h20L12 2z"/><path d="M8.5 19.5L12 13l3.5 6.5"/><path d="M15.5 13H22l-3.5-6.5"/>
+            </svg>
+            <p>Google Drive'a bağlanmak için önce Ayarlar'dan API bilgilerinizi girin, ardından bağlanın.</p>
+            <button class="btn-primary" id="btn-drive-connect" style="width:auto;padding:0 24px;">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
+              </svg>
+              Google ile Bağlan
+            </button>
+          </div>
+        </div>
+        <!-- Connected state -->
+        <div class="drive-connected" id="drive-connected" style="display:none;">
+          <div class="drive-toolbar">
+            <div class="drive-breadcrumb" id="drive-breadcrumb">
+              <span class="drive-breadcrumb-item drive-breadcrumb-root" id="drive-go-root">Drive</span>
+            </div>
+            <div class="drive-toolbar-actions">
+              <button class="btn-secondary btn-sm" id="btn-drive-upload">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                </svg>
+                Yükle
+              </button>
+              <button class="btn-secondary btn-sm" id="btn-drive-refresh">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                  <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                </svg>
+              </button>
+              <button class="btn-secondary btn-sm drive-disconnect-btn" id="btn-drive-disconnect-panel">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+                Bağlantıyı Kes
+              </button>
+            </div>
+          </div>
+          <div class="drive-file-list" id="drive-file-list">
+            <div class="loading-state"><div class="loading-spinner"></div><p>Dosyalar yükleniyor...</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Settings Panel -->
+  <div class="settings-panel-overlay" id="settings-panel-overlay" style="display:none;">
+    <div class="settings-panel">
+      <div class="settings-panel-header">
+        <h3>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+          </svg>
+          Ayarlar
+        </h3>
+        <button class="compose-close" id="btn-settings-close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="settings-panel-body">
+        <!-- Quick Replies Section -->
+        <div class="settings-section">
+          <h4>Hazır Yanıtlar / Şablonlar</h4>
+          <p class="settings-hint">Mesaj yazarken hızlıca kullanabileceğiniz hazır şablonlar ekleyin.</p>
+          <div class="quick-reply-form">
+            <div class="form-group">
+              <label>Şablon Adı</label>
+              <input type="text" id="qr-name" placeholder="Örn: Teşekkür mesajı">
+            </div>
+            <div class="form-group">
+              <label>Şablon İçeriği</label>
+              <textarea id="qr-body" placeholder="Şablon metnini buraya yazın..." rows="4"></textarea>
+            </div>
+            <button class="btn-primary" id="btn-save-qr" style="width:auto;padding:0 24px;height:40px;font-size:13px;">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+              Şablon Ekle
+            </button>
+          </div>
+          <div class="quick-reply-list" id="quick-reply-list"></div>
+        </div>
+
+        <!-- Google Drive Credentials Section -->
+        <div class="settings-section">
+          <h4>Google Drive API Ayarları</h4>
+          <p class="settings-hint">Google Cloud Console'dan alınan OAuth2 bilgilerini girin. Drive sekmesinden dosyalarınıza erişebilirsiniz.</p>
+          <div class="form-group">
+            <label>Client ID</label>
+            <input type="text" id="drive-client-id" placeholder="xxxxxxxx.apps.googleusercontent.com">
+          </div>
+          <div class="form-group">
+            <label>Client Secret</label>
+            <input type="password" id="drive-client-secret" placeholder="GOCSPX-xxxxxxxxx">
+          </div>
+          <button class="btn-primary" id="btn-save-drive-creds" style="width:auto;padding:0 24px;height:40px;font-size:13px;">Kaydet</button>
+        </div>
       </div>
     </div>
   </div>

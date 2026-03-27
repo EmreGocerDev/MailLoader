@@ -15,7 +15,7 @@
 
 > Geliştirici değilseniz — sadece programı kullanmak istiyorsanız:
 
-1. `dist` klasöründeki **`MailLoader Setup 1.0.0.exe`** dosyasına çift tıklayın veya ** https://drive.google.com/file/d/1KBEAzn7TN2Tr9kTuXJweRqJLMOd_jYXq/view?usp=sharing **
+1. `dist` klasöründeki **`MailLoader Setup 1.0.2.exe`** dosyasına çift tıklayın
 2. Kurulum sihirbazını takip edin, kurulum klasörünü seçin
 3. **Kur** butonuna basın — kurulum 30 saniyede tamamlanır
 4. Masaüstündeki **MailLoader** ikonuna çift tıklayıp açın
@@ -45,6 +45,11 @@
 | 🔍 **Arama** | Gelen kutusunda anlık e-posta arama |
 | ⭐ **Yıldızlama** | Önemli e-postaları yıldızla |
 | 🗑️ **Silme** | E-postaları sil |
+| ☑️ **Toplu Silme** | Seçerek birden fazla e-postayı toplu sil |
+| 🛡️ **Favoriler Hariç Sil** | Yıldızlı e-postalar korunarak geri kalanı sil |
+| 📝 **Hazır Yanıtlar** | Şablon mesajlar kaydet, yazarken hızlıca ekle |
+| ⚙️ **Ayarlar Paneli** | Hazır yanıt ve Google Drive API ayarları |
+| ☁️ **Google Drive** | Drive dosyalarını görüntüle, yükle ve indir |
 
 ---
 

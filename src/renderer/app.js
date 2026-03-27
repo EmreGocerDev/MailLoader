@@ -87,7 +87,11 @@ let state = {
   currentEmail: null,
   folders: [],
   searching: false,
-  contacts: []
+  contacts: [],
+  selectedUids: new Set(),
+  quickReplies: [],
+  driveCurrentFolder: null,
+  driveBreadcrumb: [{ id: null, name: 'Drive' }]
 };
 
 // Detect if current folder is a sent folder
@@ -457,6 +461,8 @@ function renderEmailList(emails) {
   const listEl = document.getElementById('email-list');
   listEl.querySelectorAll('.email-row').forEach(el => el.remove());
   const inSent = isSentFolder(state.currentFolder);
+  state.selectedUids.clear();
+  updateBulkActions();
 
   emails.forEach((email, idx) => {
     // In Sent folder, show recipient instead of sender
@@ -469,6 +475,10 @@ function renderEmailList(emails) {
     row.style.animationDelay = `${idx * 0.02}s`;
 
     row.innerHTML = `
+      <label class="email-checkbox-label" title="Seç">
+        <input type="checkbox" class="email-checkbox" data-uid="${email.uid}">
+        <span class="custom-checkbox"></span>
+      </label>
       <button class="star-btn${email.flagged ? ' starred' : ''}" data-uid="${email.uid}">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="${email.flagged ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2">
           <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
@@ -483,6 +493,24 @@ function renderEmailList(emails) {
         <div class="email-subject">${escapeHtml(email.subject || '(Konu yok)')}</div>
       </div>
     `;
+
+    // Checkbox toggle
+    const checkbox = row.querySelector('.email-checkbox');
+    checkbox.addEventListener('change', (e) => {
+      e.stopPropagation();
+      if (checkbox.checked) {
+        state.selectedUids.add(email.uid);
+      } else {
+        state.selectedUids.delete(email.uid);
+      }
+      row.classList.toggle('selected', checkbox.checked);
+      updateBulkActions();
+    });
+
+    // Prevent checkbox label click from opening email
+    row.querySelector('.email-checkbox-label').addEventListener('click', (e) => {
+      e.stopPropagation();
+    });
 
     // Star toggle
     row.querySelector('.star-btn').addEventListener('click', async (e) => {
@@ -877,7 +905,11 @@ document.getElementById('btn-refresh').addEventListener('click', () => {
 document.addEventListener('keydown', (e) => {
   // Escape to close compose/theme panel or go back
   if (e.key === 'Escape') {
-    if (document.getElementById('theme-panel-overlay').style.display !== 'none') {
+    if (document.getElementById('settings-panel-overlay').style.display !== 'none') {
+      closeSettingsPanel();
+    } else if (document.getElementById('drive-panel-overlay').style.display !== 'none') {
+      closeDrivePanel();
+    } else if (document.getElementById('theme-panel-overlay').style.display !== 'none') {
       closeThemePanel();
     } else if (document.getElementById('compose-overlay').style.display !== 'none') {
       closeCompose();
@@ -1296,3 +1328,376 @@ function stopLiquid() {
 loadTheme();
 initSounds();
 init();
+
+// ============ Bulk Selection & Delete ============
+
+function updateBulkActions() {
+  const count = state.selectedUids.size;
+  const bulkBar = document.getElementById('bulk-actions');
+  const bulkCount = document.getElementById('bulk-count');
+  const selectAll = document.getElementById('select-all-checkbox');
+
+  if (count > 0) {
+    bulkBar.style.display = 'flex';
+    bulkCount.textContent = `${count} seçili`;
+  } else {
+    bulkBar.style.display = 'none';
+  }
+
+  // Update select-all state
+  const checkboxes = document.querySelectorAll('.email-checkbox');
+  if (checkboxes.length > 0 && count === checkboxes.length) {
+    selectAll.checked = true;
+    selectAll.indeterminate = false;
+  } else if (count > 0) {
+    selectAll.checked = false;
+    selectAll.indeterminate = true;
+  } else {
+    selectAll.checked = false;
+    selectAll.indeterminate = false;
+  }
+}
+
+document.getElementById('select-all-checkbox').addEventListener('change', (e) => {
+  const checked = e.target.checked;
+  const checkboxes = document.querySelectorAll('.email-checkbox');
+  state.selectedUids.clear();
+
+  checkboxes.forEach(cb => {
+    cb.checked = checked;
+    const uid = parseInt(cb.dataset.uid);
+    const row = cb.closest('.email-row');
+    if (checked) {
+      state.selectedUids.add(uid);
+      row.classList.add('selected');
+    } else {
+      row.classList.remove('selected');
+    }
+  });
+  updateBulkActions();
+});
+
+document.getElementById('btn-delete-selected').addEventListener('click', async () => {
+  if (state.selectedUids.size === 0) return;
+  const count = state.selectedUids.size;
+  if (!confirm(`${count} e-posta silinecek. Emin misiniz?`)) return;
+
+  const uids = Array.from(state.selectedUids);
+  const result = await window.mailAPI.deleteMultipleEmails(uids, state.currentFolder);
+  if (result.success) {
+    showToast(`${count} e-posta silindi`, 'success');
+    state.selectedUids.clear();
+    updateBulkActions();
+    loadEmails();
+  } else {
+    showToast('Silme hatası: ' + result.error, 'error');
+  }
+});
+
+document.getElementById('btn-delete-non-favorites').addEventListener('click', async () => {
+  if (!confirm('Favoriler (yıldızlı) hariç tüm e-postalar silinecek. Emin misiniz?')) return;
+
+  const result = await window.mailAPI.deleteNonFavorites(state.currentFolder);
+  if (result.success) {
+    showToast(`${result.count} e-posta silindi (favoriler korundu)`, 'success');
+    state.selectedUids.clear();
+    updateBulkActions();
+    loadEmails();
+  } else {
+    showToast('Silme hatası: ' + result.error, 'error');
+  }
+});
+
+// ============ Settings Panel ============
+
+function openSettingsPanel() {
+  document.getElementById('settings-panel-overlay').style.display = 'flex';
+  loadQuickReplies();
+  loadDriveCredentials();
+}
+
+function closeSettingsPanel() {
+  document.getElementById('settings-panel-overlay').style.display = 'none';
+}
+
+document.getElementById('btn-settings').addEventListener('click', openSettingsPanel);
+document.getElementById('btn-settings-close').addEventListener('click', closeSettingsPanel);
+document.getElementById('settings-panel-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'settings-panel-overlay') closeSettingsPanel();
+});
+
+// ============ Quick Replies / Templates ============
+
+async function loadQuickReplies() {
+  state.quickReplies = await window.mailAPI.getQuickReplies();
+  renderQuickReplyList();
+}
+
+function renderQuickReplyList() {
+  const list = document.getElementById('quick-reply-list');
+  list.innerHTML = '';
+  if (state.quickReplies.length === 0) {
+    list.innerHTML = '<div class="settings-empty">Henüz şablon eklenmemiş.</div>';
+    return;
+  }
+  state.quickReplies.forEach(qr => {
+    const item = document.createElement('div');
+    item.className = 'quick-reply-item';
+    item.innerHTML = `
+      <div class="qr-item-content">
+        <strong>${escapeHtml(qr.name)}</strong>
+        <p>${escapeHtml(qr.body).substring(0, 100)}${qr.body.length > 100 ? '...' : ''}</p>
+      </div>
+      <button class="qr-remove-btn" data-id="${escapeHtml(qr.id)}" title="Sil">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    `;
+    item.querySelector('.qr-remove-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      state.quickReplies = await window.mailAPI.removeQuickReply(qr.id);
+      renderQuickReplyList();
+      showToast('Şablon silindi', 'info');
+    });
+    list.appendChild(item);
+  });
+}
+
+document.getElementById('btn-save-qr').addEventListener('click', async () => {
+  const name = document.getElementById('qr-name').value.trim();
+  const body = document.getElementById('qr-body').value.trim();
+  if (!name || !body) {
+    showToast('Şablon adı ve içeriği gerekli', 'error');
+    return;
+  }
+  state.quickReplies = await window.mailAPI.saveQuickReply({ name, body });
+  renderQuickReplyList();
+  document.getElementById('qr-name').value = '';
+  document.getElementById('qr-body').value = '';
+  showToast('Şablon eklendi', 'success');
+});
+
+// Template Sidebar in Compose
+document.getElementById('btn-toggle-templates').addEventListener('click', async () => {
+  const sidebar = document.getElementById('template-sidebar');
+  const isVisible = sidebar.style.display !== 'none';
+  sidebar.style.display = isVisible ? 'none' : 'flex';
+  if (!isVisible) {
+    await loadQuickReplies();
+    renderTemplateSidebar();
+  }
+});
+
+document.getElementById('btn-close-templates').addEventListener('click', () => {
+  document.getElementById('template-sidebar').style.display = 'none';
+});
+
+function renderTemplateSidebar() {
+  const list = document.getElementById('template-sidebar-list');
+  list.innerHTML = '';
+  if (state.quickReplies.length === 0) {
+    list.innerHTML = '<div class="template-empty">Henüz hazır yanıt yok. Ayarlardan ekleyin.</div>';
+    return;
+  }
+  state.quickReplies.forEach(qr => {
+    const item = document.createElement('div');
+    item.className = 'template-item';
+    item.innerHTML = `
+      <strong>${escapeHtml(qr.name)}</strong>
+      <p>${escapeHtml(qr.body).substring(0, 80)}${qr.body.length > 80 ? '...' : ''}</p>
+    `;
+    item.addEventListener('click', () => {
+      const textarea = document.getElementById('compose-body');
+      const start = textarea.selectionStart;
+      const end = textarea.selectionEnd;
+      const text = textarea.value;
+      textarea.value = text.substring(0, start) + qr.body + text.substring(end);
+      textarea.focus();
+      textarea.selectionStart = textarea.selectionEnd = start + qr.body.length;
+    });
+    list.appendChild(item);
+  });
+}
+
+// Load templates when compose opens
+const origOpenCompose = openCompose;
+// already defined above, we override by wrapping
+const _openComposeBase = openCompose;
+
+// ============ Google Drive Credentials ============
+
+async function loadDriveCredentials() {
+  const creds = await window.mailAPI.driveGetCredentials();
+  document.getElementById('drive-client-id').value = creds.clientId || '';
+  document.getElementById('drive-client-secret').value = creds.clientSecret || '';
+}
+
+document.getElementById('btn-save-drive-creds').addEventListener('click', async () => {
+  const clientId = document.getElementById('drive-client-id').value.trim();
+  const clientSecret = document.getElementById('drive-client-secret').value.trim();
+  await window.mailAPI.driveSetCredentials(clientId, clientSecret);
+  showToast('Google Drive API bilgileri kaydedildi', 'success');
+});
+
+// ============ Google Drive Panel ============
+
+function openDrivePanel() {
+  document.getElementById('drive-panel-overlay').style.display = 'flex';
+  checkDriveConnection();
+}
+
+function closeDrivePanel() {
+  document.getElementById('drive-panel-overlay').style.display = 'none';
+}
+
+document.getElementById('btn-drive-tab').addEventListener('click', openDrivePanel);
+document.getElementById('btn-drive-close').addEventListener('click', closeDrivePanel);
+document.getElementById('drive-panel-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'drive-panel-overlay') closeDrivePanel();
+});
+
+async function checkDriveConnection() {
+  const connected = await window.mailAPI.driveIsConnected();
+  document.getElementById('drive-not-connected').style.display = connected ? 'none' : 'flex';
+  document.getElementById('drive-connected').style.display = connected ? 'flex' : 'none';
+  if (connected) {
+    state.driveCurrentFolder = null;
+    state.driveBreadcrumb = [{ id: null, name: 'Drive' }];
+    renderDriveBreadcrumb();
+    loadDriveFiles();
+  }
+}
+
+document.getElementById('btn-drive-connect').addEventListener('click', async () => {
+  const btn = document.getElementById('btn-drive-connect');
+  btn.disabled = true;
+  btn.textContent = 'Bağlanıyor...';
+
+  const result = await window.mailAPI.driveAuth();
+  btn.disabled = false;
+  btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Google ile Bağlan`;
+
+  if (result.success) {
+    showToast('Google Drive bağlandı!', 'success');
+    checkDriveConnection();
+  } else {
+    showToast('Bağlantı hatası: ' + result.error, 'error');
+  }
+});
+
+document.getElementById('btn-drive-disconnect-panel').addEventListener('click', async () => {
+  await window.mailAPI.driveDisconnect();
+  showToast('Google Drive bağlantısı kesildi', 'info');
+  checkDriveConnection();
+});
+
+async function loadDriveFiles(folderId) {
+  const listEl = document.getElementById('drive-file-list');
+  listEl.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Dosyalar yükleniyor...</p></div>';
+
+  const result = await window.mailAPI.driveListFiles(folderId || null);
+
+  if (!result.success) {
+    listEl.innerHTML = `<div class="drive-error"><p>${escapeHtml(result.error)}</p></div>`;
+    return;
+  }
+
+  if (result.files.length === 0) {
+    listEl.innerHTML = '<div class="drive-empty"><svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="1.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg><p>Bu klasör boş</p></div>';
+    return;
+  }
+
+  listEl.innerHTML = '';
+  result.files.forEach(file => {
+    const isFolder = file.mimeType === 'application/vnd.google-apps.folder';
+    const item = document.createElement('div');
+    item.className = 'drive-file-item';
+    item.innerHTML = `
+      <div class="drive-file-icon">
+        ${isFolder
+          ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="var(--primary)" stroke="var(--primary)" stroke-width="1"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>'
+          : '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
+        }
+      </div>
+      <div class="drive-file-info">
+        <span class="drive-file-name">${escapeHtml(file.name)}</span>
+        <span class="drive-file-meta">${isFolder ? 'Klasör' : formatSize(parseInt(file.size) || 0)}${file.modifiedTime ? ' · ' + formatDate(file.modifiedTime) : ''}</span>
+      </div>
+      ${!isFolder ? `<button class="drive-download-btn" title="İndir">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+      </button>` : ''}
+    `;
+
+    if (isFolder) {
+      item.addEventListener('click', () => {
+        state.driveCurrentFolder = file.id;
+        state.driveBreadcrumb.push({ id: file.id, name: file.name });
+        renderDriveBreadcrumb();
+        loadDriveFiles(file.id);
+      });
+    } else {
+      const downloadBtn = item.querySelector('.drive-download-btn');
+      if (downloadBtn) {
+        downloadBtn.addEventListener('click', async (e) => {
+          e.stopPropagation();
+          const res = await window.mailAPI.driveDownloadFile(file.id, file.name);
+          if (res.success) showToast('Dosya indirildi', 'success');
+          else showToast('İndirme hatası: ' + res.error, 'error');
+        });
+      }
+    }
+
+    listEl.appendChild(item);
+  });
+}
+
+function renderDriveBreadcrumb() {
+  const container = document.getElementById('drive-breadcrumb');
+  container.innerHTML = '';
+  state.driveBreadcrumb.forEach((item, idx) => {
+    const span = document.createElement('span');
+    span.className = 'drive-breadcrumb-item';
+    span.textContent = item.name;
+    if (idx < state.driveBreadcrumb.length - 1) {
+      span.style.cursor = 'pointer';
+      span.style.opacity = '0.7';
+      span.addEventListener('click', () => {
+        state.driveBreadcrumb = state.driveBreadcrumb.slice(0, idx + 1);
+        state.driveCurrentFolder = item.id;
+        renderDriveBreadcrumb();
+        loadDriveFiles(item.id);
+      });
+    }
+    container.appendChild(span);
+    if (idx < state.driveBreadcrumb.length - 1) {
+      const sep = document.createElement('span');
+      sep.className = 'drive-breadcrumb-sep';
+      sep.textContent = ' / ';
+      container.appendChild(sep);
+    }
+  });
+}
+
+document.getElementById('btn-drive-upload').addEventListener('click', async () => {
+  const result = await window.mailAPI.driveUploadFile(state.driveCurrentFolder);
+  if (result.success) {
+    showToast(`${result.files.length} dosya yüklendi`, 'success');
+    loadDriveFiles(state.driveCurrentFolder);
+  } else if (result.error !== 'İptal edildi') {
+    showToast('Yükleme hatası: ' + result.error, 'error');
+  }
+});
+
+document.getElementById('btn-drive-refresh').addEventListener('click', () => {
+  loadDriveFiles(state.driveCurrentFolder);
+});
+
+document.getElementById('drive-go-root')?.addEventListener('click', () => {
+  state.driveCurrentFolder = null;
+  state.driveBreadcrumb = [{ id: null, name: 'Drive' }];
+  renderDriveBreadcrumb();
+  loadDriveFiles(null);
+});

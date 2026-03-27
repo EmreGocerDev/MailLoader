@@ -1,6 +1,6 @@
 {
   "name": "mailloader",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "Modern Desktop Email Client",
   "main": "main.js",
   "scripts": {
@@ -47,6 +47,7 @@
   },
   "dependencies": {
     "electron-store": "^8.1.0",
+    "googleapis": "^128.0.0",
     "imap": "^0.8.19",
     "mailparser": "^3.6.5",
     "nodemailer": "^6.9.7"

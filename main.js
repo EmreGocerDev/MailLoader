@@ -4,6 +4,9 @@ const fs = require('fs');
 const EmailService = require('./src/emailService');
 const Store = require('electron-store');
 
+let googleApis;
+try { googleApis = require('googleapis'); } catch (e) { googleApis = null; }
+
 const store = new Store({
   encryptionKey: 'mailloader-secure-key-2024',
   schema: {
@@ -17,7 +20,11 @@ const store = new Store({
     selectedLogo: { type: 'string', default: 'logo.ico' },
     contacts: { type: 'array', default: [] },
     lastSeenUid: { type: 'number', default: 0 },
-    notificationSound: { type: 'string', default: 'default' }
+    notificationSound: { type: 'string', default: 'default' },
+    quickReplies: { type: 'array', default: [] },
+    driveClientId: { type: 'string', default: '' },
+    driveClientSecret: { type: 'string', default: '' },
+    driveTokens: { type: 'object', default: {} }
   }
 });
 
@@ -503,4 +510,248 @@ ipcMain.handle('force-quit', () => {
     service.disconnect();
   }
   app.quit();
+});
+
+// ============ Bulk Delete ============
+ipcMain.handle('delete-multiple-emails', async (_, uids, folder = 'INBOX') => {
+  try {
+    const service = await getActiveService();
+    if (!service) return { success: false, error: 'No active account' };
+    await service.deleteMultipleEmails(uids, folder);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('delete-non-favorites', async (_, folder = 'INBOX') => {
+  try {
+    const service = await getActiveService();
+    if (!service) return { success: false, error: 'No active account' };
+    const uids = await service.getNonFlaggedUids(folder);
+    if (uids.length === 0) return { success: true, count: 0 };
+    await service.deleteMultipleEmails(uids, folder);
+    return { success: true, count: uids.length };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// ============ Quick Replies / Templates ============
+ipcMain.handle('get-quick-replies', () => store.get('quickReplies', []));
+
+ipcMain.handle('save-quick-reply', (_, reply) => {
+  const replies = store.get('quickReplies', []);
+  if (reply.id) {
+    const idx = replies.findIndex(r => r.id === reply.id);
+    if (idx >= 0) replies[idx] = reply;
+    else replies.push(reply);
+  } else {
+    reply.id = Date.now().toString();
+    replies.push(reply);
+  }
+  store.set('quickReplies', replies);
+  return replies;
+});
+
+ipcMain.handle('remove-quick-reply', (_, id) => {
+  const replies = store.get('quickReplies', []).filter(r => r.id !== id);
+  store.set('quickReplies', replies);
+  return replies;
+});
+
+// ============ Google Drive ============
+function createDriveOAuth2Client() {
+  if (!googleApis) return null;
+  const clientId = store.get('driveClientId', '');
+  const clientSecret = store.get('driveClientSecret', '');
+  if (!clientId || !clientSecret) return null;
+  return new googleApis.google.auth.OAuth2(clientId, clientSecret, 'http://localhost');
+}
+
+function getDriveClient() {
+  const oauth2Client = createDriveOAuth2Client();
+  if (!oauth2Client) return null;
+  const tokens = store.get('driveTokens', {});
+  if (!tokens.access_token) return null;
+  oauth2Client.setCredentials(tokens);
+  oauth2Client.on('tokens', (newTokens) => {
+    const current = store.get('driveTokens', {});
+    store.set('driveTokens', { ...current, ...newTokens });
+  });
+  return googleApis.google.drive({ version: 'v3', auth: oauth2Client });
+}
+
+ipcMain.handle('drive-set-credentials', (_, clientId, clientSecret) => {
+  store.set('driveClientId', clientId || '');
+  store.set('driveClientSecret', clientSecret || '');
+  return true;
+});
+
+ipcMain.handle('drive-get-credentials', () => {
+  return {
+    clientId: store.get('driveClientId', ''),
+    clientSecret: store.get('driveClientSecret', '')
+  };
+});
+
+ipcMain.handle('drive-is-connected', () => {
+  const tokens = store.get('driveTokens', {});
+  return !!tokens.access_token;
+});
+
+ipcMain.handle('drive-auth', async () => {
+  const oauth2Client = createDriveOAuth2Client();
+  if (!oauth2Client) return { success: false, error: 'Client ID ve Client Secret ayarlanmamış' };
+
+  const authUrl = oauth2Client.generateAuthUrl({
+    access_type: 'offline',
+    scope: ['https://www.googleapis.com/auth/drive'],
+    prompt: 'consent'
+  });
+
+  return new Promise((resolve) => {
+    const authWindow = new BrowserWindow({
+      width: 600,
+      height: 700,
+      parent: mainWindow,
+      modal: true,
+      webPreferences: { nodeIntegration: false, contextIsolation: true }
+    });
+
+    let resolved = false;
+    const finish = (result) => {
+      if (resolved) return;
+      resolved = true;
+      try { authWindow.close(); } catch (e) {}
+      resolve(result);
+    };
+
+    authWindow.loadURL(authUrl);
+
+    const handleUrl = async (url) => {
+      if (!url.startsWith('http://localhost')) return;
+      try {
+        const urlObj = new URL(url);
+        const code = urlObj.searchParams.get('code');
+        if (code) {
+          const { tokens } = await oauth2Client.getToken(code);
+          store.set('driveTokens', tokens);
+          finish({ success: true });
+        }
+      } catch (err) {
+        finish({ success: false, error: err.message });
+      }
+    };
+
+    authWindow.webContents.on('will-redirect', (event, url) => {
+      if (url.startsWith('http://localhost')) {
+        event.preventDefault();
+        handleUrl(url);
+      }
+    });
+
+    authWindow.webContents.on('will-navigate', (event, url) => {
+      if (url.startsWith('http://localhost')) {
+        event.preventDefault();
+        handleUrl(url);
+      }
+    });
+
+    authWindow.on('closed', () => {
+      finish({ success: false, error: 'Yetkilendirme iptal edildi' });
+    });
+  });
+});
+
+ipcMain.handle('drive-disconnect', () => {
+  store.set('driveTokens', {});
+  return true;
+});
+
+ipcMain.handle('drive-list-files', async (_, folderId) => {
+  try {
+    const drive = getDriveClient();
+    if (!drive) return { success: false, error: 'Drive bağlantısı yok' };
+
+    const query = folderId
+      ? `'${folderId}' in parents and trashed = false`
+      : `'root' in parents and trashed = false`;
+
+    const res = await drive.files.list({
+      q: query,
+      fields: 'files(id, name, mimeType, size, modifiedTime, iconLink, webViewLink)',
+      orderBy: 'folder,name',
+      pageSize: 100
+    });
+
+    return { success: true, files: res.data.files || [] };
+  } catch (error) {
+    if (error.code === 401) {
+      store.set('driveTokens', {});
+      return { success: false, error: 'Oturum süresi doldu, tekrar bağlanın' };
+    }
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('drive-upload-file', async (_, folderId) => {
+  try {
+    const drive = getDriveClient();
+    if (!drive) return { success: false, error: 'Drive bağlantısı yok' };
+
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: 'Drive\'a Dosya Yükle',
+      properties: ['openFile', 'multiSelections']
+    });
+
+    if (result.canceled || result.filePaths.length === 0) return { success: false, error: 'İptal edildi' };
+
+    const uploaded = [];
+    for (const filePath of result.filePaths) {
+      const fileName = path.basename(filePath);
+      const fileMetadata = { name: fileName };
+      if (folderId) fileMetadata.parents = [folderId];
+
+      const media = { body: fs.createReadStream(filePath) };
+      const res = await drive.files.create({
+        resource: fileMetadata,
+        media: media,
+        fields: 'id, name'
+      });
+      uploaded.push(res.data);
+    }
+
+    return { success: true, files: uploaded };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+ipcMain.handle('drive-download-file', async (_, fileId, fileName) => {
+  try {
+    const drive = getDriveClient();
+    if (!drive) return { success: false, error: 'Drive bağlantısı yok' };
+
+    const result = await dialog.showSaveDialog(mainWindow, {
+      title: 'Dosyayı İndir',
+      defaultPath: fileName || 'download'
+    });
+
+    if (result.canceled || !result.filePath) return { success: false, error: 'İptal edildi' };
+
+    const res = await drive.files.get({ fileId, alt: 'media' }, { responseType: 'stream' });
+    const dest = fs.createWriteStream(result.filePath);
+
+    await new Promise((resolve, reject) => {
+      res.data.pipe(dest);
+      dest.on('finish', resolve);
+      dest.on('error', reject);
+    });
+
+    shell.showItemInFolder(result.filePath);
+    return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
 });
