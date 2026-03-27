@@ -22,8 +22,6 @@ const store = new Store({
     lastSeenUid: { type: 'number', default: 0 },
     notificationSound: { type: 'string', default: 'default' },
     quickReplies: { type: 'array', default: [] },
-    driveClientId: { type: 'string', default: '' },
-    driveClientSecret: { type: 'string', default: '' },
     driveTokens: { type: 'object', default: {} }
   }
 });
@@ -561,12 +559,15 @@ ipcMain.handle('remove-quick-reply', (_, id) => {
 });
 
 // ============ Google Drive ============
+let driveConfig = { clientId: '', clientSecret: '' };
+try { driveConfig = require('./src/driveConfig'); } catch (e) { /* driveConfig.js not found */ }
+
+const DRIVE_CLIENT_ID = driveConfig.clientId;
+const DRIVE_CLIENT_SECRET = driveConfig.clientSecret;
+
 function createDriveOAuth2Client() {
   if (!googleApis) return null;
-  const clientId = store.get('driveClientId', '');
-  const clientSecret = store.get('driveClientSecret', '');
-  if (!clientId || !clientSecret) return null;
-  return new googleApis.google.auth.OAuth2(clientId, clientSecret, 'http://localhost');
+  return new googleApis.google.auth.OAuth2(DRIVE_CLIENT_ID, DRIVE_CLIENT_SECRET, 'http://localhost');
 }
 
 function getDriveClient() {
@@ -581,19 +582,6 @@ function getDriveClient() {
   });
   return googleApis.google.drive({ version: 'v3', auth: oauth2Client });
 }
-
-ipcMain.handle('drive-set-credentials', (_, clientId, clientSecret) => {
-  store.set('driveClientId', clientId || '');
-  store.set('driveClientSecret', clientSecret || '');
-  return true;
-});
-
-ipcMain.handle('drive-get-credentials', () => {
-  return {
-    clientId: store.get('driveClientId', ''),
-    clientSecret: store.get('driveClientSecret', '')
-  };
-});
 
 ipcMain.handle('drive-is-connected', () => {
   const tokens = store.get('driveTokens', {});

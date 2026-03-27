@@ -1413,7 +1413,6 @@ document.getElementById('btn-delete-non-favorites').addEventListener('click', as
 function openSettingsPanel() {
   document.getElementById('settings-panel-overlay').style.display = 'flex';
   loadQuickReplies();
-  loadDriveCredentials();
 }
 
 function closeSettingsPanel() {
@@ -1524,21 +1523,6 @@ function renderTemplateSidebar() {
 const origOpenCompose = openCompose;
 // already defined above, we override by wrapping
 const _openComposeBase = openCompose;
-
-// ============ Google Drive Credentials ============
-
-async function loadDriveCredentials() {
-  const creds = await window.mailAPI.driveGetCredentials();
-  document.getElementById('drive-client-id').value = creds.clientId || '';
-  document.getElementById('drive-client-secret').value = creds.clientSecret || '';
-}
-
-document.getElementById('btn-save-drive-creds').addEventListener('click', async () => {
-  const clientId = document.getElementById('drive-client-id').value.trim();
-  const clientSecret = document.getElementById('drive-client-secret').value.trim();
-  await window.mailAPI.driveSetCredentials(clientId, clientSecret);
-  showToast('Google Drive API bilgileri kaydedildi', 'success');
-});
 
 // ============ Google Drive Panel ============
 

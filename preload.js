@@ -67,8 +67,6 @@ contextBridge.exposeInMainWorld('mailAPI', {
   removeQuickReply: (id) => ipcRenderer.invoke('remove-quick-reply', id),
 
   // Google Drive
-  driveSetCredentials: (clientId, clientSecret) => ipcRenderer.invoke('drive-set-credentials', clientId, clientSecret),
-  driveGetCredentials: () => ipcRenderer.invoke('drive-get-credentials'),
   driveIsConnected: () => ipcRenderer.invoke('drive-is-connected'),
   driveAuth: () => ipcRenderer.invoke('drive-auth'),
   driveDisconnect: () => ipcRenderer.invoke('drive-disconnect'),
