@@ -72,5 +72,13 @@ contextBridge.exposeInMainWorld('mailAPI', {
   driveDisconnect: () => ipcRenderer.invoke('drive-disconnect'),
   driveListFiles: (folderId) => ipcRenderer.invoke('drive-list-files', folderId),
   driveUploadFile: (folderId) => ipcRenderer.invoke('drive-upload-file', folderId),
-  driveDownloadFile: (fileId, fileName) => ipcRenderer.invoke('drive-download-file', fileId, fileName)
+  driveDownloadFile: (fileId, fileName) => ipcRenderer.invoke('drive-download-file', fileId, fileName),
+
+  // Gemini AI
+  getGeminiSettings: () => ipcRenderer.invoke('get-gemini-settings'),
+  saveGeminiSettings: (settings) => ipcRenderer.invoke('save-gemini-settings', settings),
+  geminiChat: (data) => ipcRenderer.invoke('gemini-chat', data),
+
+  // Notification popup from main
+  onNotificationPopup: (callback) => ipcRenderer.on('show-notification-popup', (_, data) => callback(data))
 });
