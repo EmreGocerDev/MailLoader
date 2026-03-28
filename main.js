@@ -16,13 +16,17 @@ const store = new Store({
     accentColor: { type: 'string', default: '#1a73e8' },
     bgImage: { type: 'string', default: '' },
     glassEnabled: { type: 'boolean', default: false },
+    glassOpacity: { type: 'number', default: 0.8 },
     liquidEnabled: { type: 'boolean', default: false },
     selectedLogo: { type: 'string', default: 'logo.ico' },
     contacts: { type: 'array', default: [] },
     lastSeenUid: { type: 'number', default: 0 },
     notificationSound: { type: 'string', default: 'default' },
     quickReplies: { type: 'array', default: [] },
-    driveTokens: { type: 'object', default: {} }
+    driveTokens: { type: 'object', default: {} },
+    driveTokensPerAccount: { type: 'object', default: {} },
+    geminiApiKey: { type: 'string', default: '' },
+    geminiModel: { type: 'string', default: 'gemini-1.5-flash' }
   }
 });
 
@@ -339,6 +343,7 @@ ipcMain.handle('get-theme-settings', () => {
     accentColor: store.get('accentColor', '#1a73e8'),
     bgImage: store.get('bgImage', ''),
     glassEnabled: store.get('glassEnabled', false),
+    glassOpacity: store.get('glassOpacity', 0.8),
     liquidEnabled: store.get('liquidEnabled', false)
   };
 });
@@ -348,6 +353,7 @@ ipcMain.handle('save-theme-settings', (_, settings) => {
   if (settings.accentColor) store.set('accentColor', settings.accentColor);
   if (settings.bgImage !== undefined) store.set('bgImage', settings.bgImage);
   if (settings.glassEnabled !== undefined) store.set('glassEnabled', settings.glassEnabled);
+  if (settings.glassOpacity !== undefined) store.set('glassOpacity', settings.glassOpacity);
   if (settings.liquidEnabled !== undefined) store.set('liquidEnabled', settings.liquidEnabled);
   return true;
 });
@@ -490,10 +496,15 @@ async function checkForNewMail() {
       });
       notification.show();
 
-      // Tell renderer to play sound and refresh
+      // Tell renderer to play sound, show custom popup, and refresh
       if (mainWindow) {
         mainWindow.webContents.send('play-sound');
         mainWindow.webContents.send('new-mail-arrived', newEmails.length);
+        mainWindow.webContents.send('show-notification-popup', {
+          count: newEmails.length,
+          from: newest.from,
+          subject: newest.subject
+        });
       }
     }
   } catch (e) {
@@ -570,21 +581,43 @@ function createDriveOAuth2Client() {
   return new googleApis.google.auth.OAuth2(DRIVE_CLIENT_ID, DRIVE_CLIENT_SECRET, 'http://localhost');
 }
 
+function getActiveAccountEmail() {
+  const activeIndex = store.get('activeAccount', -1);
+  const accounts = store.get('accounts', []);
+  if (activeIndex >= 0 && activeIndex < accounts.length) return accounts[activeIndex].email;
+  return null;
+}
+
+function getDriveTokensForAccount() {
+  const email = getActiveAccountEmail();
+  if (!email) return {};
+  const allTokens = store.get('driveTokensPerAccount', {});
+  return allTokens[email] || {};
+}
+
+function setDriveTokensForAccount(tokens) {
+  const email = getActiveAccountEmail();
+  if (!email) return;
+  const allTokens = store.get('driveTokensPerAccount', {});
+  allTokens[email] = tokens;
+  store.set('driveTokensPerAccount', allTokens);
+}
+
 function getDriveClient() {
   const oauth2Client = createDriveOAuth2Client();
   if (!oauth2Client) return null;
-  const tokens = store.get('driveTokens', {});
+  const tokens = getDriveTokensForAccount();
   if (!tokens.access_token) return null;
   oauth2Client.setCredentials(tokens);
   oauth2Client.on('tokens', (newTokens) => {
-    const current = store.get('driveTokens', {});
-    store.set('driveTokens', { ...current, ...newTokens });
+    const current = getDriveTokensForAccount();
+    setDriveTokensForAccount({ ...current, ...newTokens });
   });
   return googleApis.google.drive({ version: 'v3', auth: oauth2Client });
 }
 
 ipcMain.handle('drive-is-connected', () => {
-  const tokens = store.get('driveTokens', {});
+  const tokens = getDriveTokensForAccount();
   return !!tokens.access_token;
 });
 
@@ -624,7 +657,7 @@ ipcMain.handle('drive-auth', async () => {
         const code = urlObj.searchParams.get('code');
         if (code) {
           const { tokens } = await oauth2Client.getToken(code);
-          store.set('driveTokens', tokens);
+          setDriveTokensForAccount(tokens);
           finish({ success: true });
         }
       } catch (err) {
@@ -653,7 +686,7 @@ ipcMain.handle('drive-auth', async () => {
 });
 
 ipcMain.handle('drive-disconnect', () => {
-  store.set('driveTokens', {});
+  setDriveTokensForAccount({});
   return true;
 });
 
@@ -676,7 +709,7 @@ ipcMain.handle('drive-list-files', async (_, folderId) => {
     return { success: true, files: res.data.files || [] };
   } catch (error) {
     if (error.code === 401) {
-      store.set('driveTokens', {});
+      setDriveTokensForAccount({});
       return { success: false, error: 'Oturum süresi doldu, tekrar bağlanın' };
     }
     return { success: false, error: error.message };
@@ -739,6 +772,120 @@ ipcMain.handle('drive-download-file', async (_, fileId, fileName) => {
 
     shell.showItemInFolder(result.filePath);
     return { success: true };
+  } catch (error) {
+    return { success: false, error: error.message };
+  }
+});
+
+// ============ Gemini AI Settings ============
+ipcMain.handle('get-gemini-settings', () => {
+  return {
+    apiKey: store.get('geminiApiKey', ''),
+    model: store.get('geminiModel', 'gemini-2.0-flash')
+  };
+});
+
+ipcMain.handle('save-gemini-settings', (_, settings) => {
+  if (settings.apiKey !== undefined) store.set('geminiApiKey', settings.apiKey);
+  if (settings.model !== undefined) store.set('geminiModel', settings.model);
+  return true;
+});
+
+ipcMain.handle('gemini-chat', async (_, { messages, emailContext }) => {
+  try {
+    const apiKey = store.get('geminiApiKey', '');
+    if (!apiKey) return { success: false, error: 'Gemini API anahtarı ayarlanmamış. Ayarlar\'dan ekleyin.' };
+
+    const model = store.get('geminiModel', 'gemini-1.5-flash');
+    const https = require('https');
+    const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
+    const systemPrompt = `SADECE JSON ÇIKTISI ÜRET. ASLA KONUŞMA. ASLA AÇIKLAMA YAPMA.
+Girdi ne olursa olsun tek yanıtın şu formatta bir JSON olmalıdır: {"type":"email","body":"metin"}
+
+KURALLAR:
+- Girdi dilini koru (İngilizce yaz denmedikçe).
+- Sadece kullanıcı verisini kullan, uydurma.
+- Markdown (**, #, \`\`\`) ASLA KULLANMA.
+- Sadece e-posta metnini oluştur.
+
+ÖRNEK:
+Girdi: emreye selam nasılsın
+Yanıt: {"type":"email","body":"Selam Emre,\\n\\nNasılsın? Merak ettim.\\n\\nSevgiler"}`;
+
+    const contents = [];
+    
+    // System prompt as first message
+    contents.push({
+      role: 'user',
+      parts: [{ text: systemPrompt }]
+    });
+    
+    // Model confirmation
+    contents.push({
+      role: 'model',
+      parts: [{ text: 'ANLADIM. Sadece JSON formatında e-posta oluşturacağım. Asla açıklama yapmayacağım.' }]
+    });
+    
+    // Add email context if exists
+    if (emailContext) {
+      contents.push({
+        role: 'user',
+        parts: [{ text: `BAĞLAM: Kimden: ${emailContext.from}, Konu: ${emailContext.subject}, Gövde: ${emailContext.body}` }]
+      });
+    }
+
+    // Add conversation messages
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      contents.push({
+        role: msg.role === 'user' ? 'user' : 'model',
+        parts: [{ text: msg.content }]
+      });
+    }
+
+    const requestBody = JSON.stringify({
+      contents: contents,
+      generationConfig: {
+        temperature: 0,
+        maxOutputTokens: 2048,
+        responseMimeType: 'application/json'
+      }
+    });
+
+    return new Promise((resolve) => {
+      const urlObj = new URL(url);
+      const req = https.request({
+        hostname: urlObj.hostname,
+        path: urlObj.pathname + urlObj.search,
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(requestBody)
+        }
+      }, (res) => {
+        let data = '';
+        res.on('data', (chunk) => { data += chunk; });
+        res.on('end', () => {
+          try {
+            const json = JSON.parse(data);
+            if (json.error) {
+              resolve({ success: false, error: json.error.message || 'API hatası' });
+              return;
+            }
+            const text = json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+            resolve({ success: true, response: text });
+          } catch (e) {
+            resolve({ success: false, error: 'API yanıtı okunamadı' });
+          }
+        });
+      });
+      req.on('error', (e) => {
+        resolve({ success: false, error: e.message });
+      });
+      req.write(requestBody);
+      req.end();
+    });
   } catch (error) {
     return { success: false, error: error.message };
   }

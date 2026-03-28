@@ -627,6 +627,10 @@ async function openEmail(email) {
     const iframe = document.getElementById('email-iframe');
     iframe.addEventListener('load', () => {
       const doc = iframe.contentDocument;
+      const isDark = document.body.classList.contains('theme-dark') || document.body.classList.contains('theme-midnight');
+      const textColor = isDark ? '#e0e0e0' : '#1f1f1f';
+      const bgColor = isDark ? '#1a1a2e' : '#ffffff';
+      const linkColor = isDark ? '#6db3f2' : '#1a73e8';
       doc.open();
       doc.write(`
         <html>
@@ -634,9 +638,11 @@ async function openEmail(email) {
         <meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data: https: http: cid: blob:; style-src 'unsafe-inline' https:; font-src https: data:; connect-src https: http:;">
         <base target="_blank">
         <style>
-          body { font-family: 'Inter', -apple-system, sans-serif; font-size: 14px; line-height: 1.6; color: #1f1f1f; margin: 0; padding: 0; }
+          body { font-family: 'Inter', -apple-system, sans-serif; font-size: 14px; line-height: 1.6; color: ${textColor}; background: ${bgColor}; margin: 0; padding: 0; }
           img { max-width: 100%; height: auto; display: inline-block; }
-          a { color: #1a73e8; cursor: pointer; }
+          a { color: ${linkColor}; cursor: pointer; }
+          div, p, span, td, th, li, h1, h2, h3, h4, h5, h6, blockquote, pre { color: inherit !important; }
+          table { border-color: ${isDark ? '#444' : '#ddd'} !important; }
         </style></head>
         <body>${e.html}</body>
         </html>
@@ -760,9 +766,8 @@ function closeCompose() {
 document.getElementById('btn-compose-close').addEventListener('click', closeCompose);
 document.getElementById('btn-discard').addEventListener('click', closeCompose);
 
-document.getElementById('compose-overlay').addEventListener('click', (e) => {
-  if (e.target === document.getElementById('compose-overlay')) closeCompose();
-});
+// Compose overlay click - only close via X button, not outside click
+// (removed outside-click-to-close to prevent accidental data loss)
 
 document.getElementById('btn-send').addEventListener('click', async () => {
   const btn = document.getElementById('btn-send');
@@ -903,9 +908,11 @@ document.getElementById('btn-refresh').addEventListener('click', () => {
 // ============ Keyboard Shortcuts ============
 
 document.addEventListener('keydown', (e) => {
-  // Escape to close compose/theme panel or go back
+  // Escape to close panels/compose or go back
   if (e.key === 'Escape') {
-    if (document.getElementById('settings-panel-overlay').style.display !== 'none') {
+    if (document.getElementById('ai-chat-overlay').style.display !== 'none') {
+      closeAiChat();
+    } else if (document.getElementById('settings-panel-overlay').style.display !== 'none') {
       closeSettingsPanel();
     } else if (document.getElementById('drive-panel-overlay').style.display !== 'none') {
       closeDrivePanel();
@@ -1061,6 +1068,7 @@ let themeSettings = {
   accentColor: '#1a73e8',
   bgImage: '',
   glassEnabled: false,
+  glassOpacity: 0.8,
   liquidEnabled: false
 };
 
@@ -1098,6 +1106,7 @@ function applyTheme() {
 
   // Glass effect
   document.body.classList.toggle('glass-enabled', !!themeSettings.glassEnabled);
+  document.documentElement.style.setProperty('--glass-opacity', themeSettings.glassOpacity || 0.8);
 
   // Liquid effect
   if (themeSettings.liquidEnabled) {
@@ -1117,6 +1126,8 @@ function applyTheme() {
   });
   document.getElementById('custom-color').value = themeSettings.accentColor;
   document.getElementById('toggle-glass').checked = !!themeSettings.glassEnabled;
+  document.getElementById('glass-opacity-slider').value = (themeSettings.glassOpacity || 0.8) * 100;
+  document.getElementById('glass-opacity-value').textContent = Math.round((themeSettings.glassOpacity || 0.8) * 100) + '%';
   document.getElementById('toggle-liquid').checked = !!themeSettings.liquidEnabled;
 }
 
@@ -1205,6 +1216,15 @@ document.getElementById('btn-clear-bg').addEventListener('click', () => {
 // Glass toggle
 document.getElementById('toggle-glass').addEventListener('change', (e) => {
   themeSettings.glassEnabled = e.target.checked;
+  applyTheme();
+  saveTheme();
+});
+
+// Glass opacity slider
+document.getElementById('glass-opacity-slider').addEventListener('input', (e) => {
+  const value = parseInt(e.target.value) / 100;
+  themeSettings.glassOpacity = value;
+  document.getElementById('glass-opacity-value').textContent = e.target.value + '%';
   applyTheme();
   saveTheme();
 });
@@ -1684,4 +1704,349 @@ document.getElementById('drive-go-root')?.addEventListener('click', () => {
   state.driveBreadcrumb = [{ id: null, name: 'Drive' }];
   renderDriveBreadcrumb();
   loadDriveFiles(null);
+});
+
+// ============ Notification Popup (WhatsApp-style) ============
+
+let notifPopupTimeout = null;
+
+function showNotificationPopup(data) {
+  const popup = document.getElementById('notification-popup');
+  const title = document.getElementById('notification-popup-title');
+  const body = document.getElementById('notification-popup-body');
+
+  title.textContent = `Yeni E-posta (${data.count})`;
+  body.textContent = `${extractName(data.from)} — ${data.subject || '(Konu yok)'}`;
+
+  popup.style.display = 'flex';
+  popup.style.animation = 'notifSlideIn 0.4s cubic-bezier(0.16, 1, 0.3, 1)';
+
+  // Auto-hide after 6 seconds
+  clearTimeout(notifPopupTimeout);
+  notifPopupTimeout = setTimeout(hideNotificationPopup, 6000);
+}
+
+function hideNotificationPopup() {
+  const popup = document.getElementById('notification-popup');
+  popup.style.animation = 'notifSlideOut 0.3s ease forwards';
+  setTimeout(() => { popup.style.display = 'none'; }, 300);
+  clearTimeout(notifPopupTimeout);
+}
+
+document.getElementById('notification-popup').addEventListener('click', (e) => {
+  if (e.target.closest('.notification-popup-close')) {
+    hideNotificationPopup();
+    return;
+  }
+  // Click on popup opens inbox
+  hideNotificationPopup();
+  if (!appScreen.classList.contains('active')) return;
+  state.currentFolder = 'INBOX';
+  state.currentPage = 1;
+  setActiveFolder('INBOX');
+  document.getElementById('current-folder-title').textContent = 'Gelen Kutusu';
+  document.getElementById('email-list-view').style.display = 'flex';
+  document.getElementById('email-detail').style.display = 'none';
+  loadEmails();
+});
+
+document.getElementById('notification-popup-close').addEventListener('click', (e) => {
+  e.stopPropagation();
+  hideNotificationPopup();
+});
+
+// Listen for notification from main process
+window.mailAPI.onNotificationPopup((data) => {
+  showNotificationPopup(data);
+});
+
+// ============ Gemini AI Settings ============
+
+async function loadGeminiSettings() {
+  try {
+    const settings = await window.mailAPI.getGeminiSettings();
+    document.getElementById('gemini-api-key').value = settings.apiKey || '';
+    const model = settings.model || 'gemini-1.5-flash';
+    const select = document.getElementById('gemini-model');
+    
+    // Check if model is a predefined option
+    const predefinedModels = ['gemini-1.5-flash', 'gemini-1.5-pro', 'gemini-2.5-flash', 'gemini-1.0-pro'];
+    if (predefinedModels.includes(model)) {
+      select.value = model;
+      document.getElementById('custom-model-group').style.display = 'none';
+    } else {
+      // Custom model
+      select.value = 'custom';
+      document.getElementById('gemini-custom-model').value = model;
+      document.getElementById('custom-model-group').style.display = 'block';
+    }
+  } catch (e) { /* ignore */ }
+}
+
+document.getElementById('toggle-api-key')?.addEventListener('click', () => {
+  const input = document.getElementById('gemini-api-key');
+  input.type = input.type === 'password' ? 'text' : 'password';
+});
+
+document.getElementById('gemini-model')?.addEventListener('change', (e) => {
+  const customGroup = document.getElementById('custom-model-group');
+  if (e.target.value === 'custom') {
+    customGroup.style.display = 'block';
+    document.getElementById('gemini-custom-model').focus();
+  } else {
+    customGroup.style.display = 'none';
+  }
+});
+
+document.getElementById('btn-save-gemini')?.addEventListener('click', async () => {
+  const apiKey = document.getElementById('gemini-api-key').value.trim();
+  let model = document.getElementById('gemini-model').value;
+  
+  if (model === 'custom') {
+    const customModel = document.getElementById('gemini-custom-model').value.trim();
+    if (!customModel) {
+      showToast('Özel model adı gerekli', 'error');
+      return;
+    }
+    model = customModel;
+  }
+  
+  await window.mailAPI.saveGeminiSettings({ apiKey, model });
+  showToast('Gemini ayarları kaydedildi', 'success');
+});
+
+document.getElementById('gemini-api-link')?.addEventListener('click', (e) => {
+  e.preventDefault();
+  window.mailAPI.openExternal('https://aistudio.google.com/apikey');
+});
+
+// Load gemini settings when settings panel opens
+const settingsEl = document.getElementById('settings-panel-overlay');
+new MutationObserver(() => {
+  if (settingsEl.style.display !== 'none') loadGeminiSettings();
+}).observe(settingsEl, { attributes: true, attributeFilter: ['style'] });
+
+// ============ AI Chat for Email Compose ============
+
+let aiChatState = {
+  messages: [],
+  emailContext: null,
+  generatedEmail: null
+};
+
+function openAiChat() {
+  // Check if there's email context (replying)
+  const subject = document.getElementById('compose-subject').value;
+  const to = document.getElementById('compose-to').value;
+  const body = document.getElementById('compose-body').value;
+
+  if (state.currentEmail) {
+    aiChatState.emailContext = {
+      from: state.currentEmail.from,
+      subject: state.currentEmail.subject,
+      body: state.currentEmail.text || '',
+      to: to
+    };
+  } else {
+    aiChatState.emailContext = null;
+  }
+
+  aiChatState.messages = [];
+  aiChatState.generatedEmail = null;
+
+  // Update UI
+  const contextEl = document.getElementById('ai-chat-context');
+  if (aiChatState.emailContext) {
+    contextEl.style.display = 'block';
+    document.getElementById('ai-chat-subject').textContent = aiChatState.emailContext.subject || '(Konu yok)';
+    document.getElementById('ai-chat-from').textContent = `Kimden: ${extractName(aiChatState.emailContext.from)}`;
+  } else {
+    contextEl.style.display = 'none';
+  }
+
+  document.getElementById('ai-chat-messages').innerHTML = '';
+  document.getElementById('ai-chat-actions').style.display = 'none';
+  document.getElementById('ai-chat-overlay').style.display = 'flex';
+  document.getElementById('ai-chat-input').value = '';
+  document.getElementById('ai-chat-input').focus();
+
+  // Add initial system message
+  addAiMessage('system', aiChatState.emailContext
+    ? 'E-postayı inceliyorum. "Bu e-postaya yanıt oluştur" yazabilir veya özel talimatlarınızı verebilirsiniz.'
+    : 'Yeni bir e-posta oluşturmamı istiyorsanız nasıl bir e-posta yazayım anlatın.'
+  );
+}
+
+function closeAiChat() {
+  document.getElementById('ai-chat-overlay').style.display = 'none';
+}
+
+function addAiMessage(role, content) {
+  const container = document.getElementById('ai-chat-messages');
+  const msg = document.createElement('div');
+  msg.className = `ai-msg ${role}`;
+  msg.textContent = content;
+  container.appendChild(msg);
+  container.scrollTop = container.scrollHeight;
+  return msg;
+}
+
+function addAiTypingIndicator() {
+  const container = document.getElementById('ai-chat-messages');
+  const msg = document.createElement('div');
+  msg.className = 'ai-msg assistant';
+  msg.id = 'ai-typing-indicator';
+  msg.innerHTML = '<div class="ai-typing"><span></span><span></span><span></span></div>';
+  container.appendChild(msg);
+  container.scrollTop = container.scrollHeight;
+  return msg;
+}
+
+function removeAiTypingIndicator() {
+  const el = document.getElementById('ai-typing-indicator');
+  if (el) el.remove();
+}
+
+async function sendAiMessage() {
+  const input = document.getElementById('ai-chat-input');
+  const userText = input.value.trim();
+  if (!userText) return;
+
+  input.value = '';
+  addAiMessage('user', userText);
+  aiChatState.messages.push({ role: 'user', content: userText });
+
+  addAiTypingIndicator();
+
+  try {
+    const result = await window.mailAPI.geminiChat({
+      messages: aiChatState.messages,
+      emailContext: aiChatState.emailContext
+    });
+
+    removeAiTypingIndicator();
+
+    if (!result.success) {
+      addAiMessage('system', 'Hata: ' + result.error);
+      return;
+    }
+
+    const responseText = result.response;
+    aiChatState.messages.push({ role: 'assistant', content: responseText });
+
+    // Try to parse JSON response
+    let parsed = null;
+    try {
+      // Extract JSON from response (it might be wrapped in markdown code blocks)
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        parsed = JSON.parse(jsonMatch[0]);
+      }
+    } catch (e) {
+      // Not JSON, treat as plain text
+    }
+
+    if (parsed && parsed.type === 'question') {
+      addAiMessage('assistant', parsed.question);
+    } else if (parsed && parsed.type === 'email') {
+      aiChatState.generatedEmail = parsed.body;
+      const msgEl = document.createElement('div');
+      msgEl.className = 'ai-msg assistant';
+      msgEl.innerHTML = `<div>E-posta yanıtı hazır:</div><div class="ai-msg-email">${escapeHtml(parsed.body)}</div>`;
+      document.getElementById('ai-chat-messages').appendChild(msgEl);
+      document.getElementById('ai-chat-messages').scrollTop = document.getElementById('ai-chat-messages').scrollHeight;
+      document.getElementById('ai-chat-actions').style.display = 'flex';
+    } else {
+      // Plain text response - could be email or conversation
+      addAiMessage('assistant', responseText);
+      // If it looks like an email, offer to use it
+      if (responseText.length > 50 && !responseText.startsWith('{')) {
+        aiChatState.generatedEmail = responseText;
+        document.getElementById('ai-chat-actions').style.display = 'flex';
+      }
+    }
+  } catch (error) {
+    removeAiTypingIndicator();
+    addAiMessage('system', 'Bağlantı hatası: ' + error.message);
+  }
+}
+
+document.getElementById('btn-ai-compose')?.addEventListener('click', openAiChat);
+document.getElementById('btn-ai-chat-close')?.addEventListener('click', closeAiChat);
+
+document.getElementById('btn-ai-chat-send')?.addEventListener('click', sendAiMessage);
+
+document.getElementById('ai-chat-input')?.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendAiMessage();
+  }
+});
+
+document.getElementById('btn-ai-use-email')?.addEventListener('click', () => {
+  if (aiChatState.generatedEmail) {
+    document.getElementById('compose-body').value = aiChatState.generatedEmail;
+    closeAiChat();
+    showToast('E-posta metni yapay zeka ile dolduruldu', 'success');
+  }
+});
+
+document.getElementById('btn-ai-regenerate')?.addEventListener('click', () => {
+  document.getElementById('ai-chat-actions').style.display = 'none';
+  aiChatState.generatedEmail = null;
+  aiChatState.messages.push({ role: 'user', content: 'Lütfen farklı bir yanıt oluştur.' });
+  addAiMessage('user', 'Lütfen farklı bir yanıt oluştur.');
+  addAiTypingIndicator();
+
+  window.mailAPI.geminiChat({
+    messages: aiChatState.messages,
+    emailContext: aiChatState.emailContext
+  }).then(result => {
+    removeAiTypingIndicator();
+    if (!result.success) {
+      addAiMessage('system', 'Hata: ' + result.error);
+      return;
+    }
+    const responseText = result.response;
+    aiChatState.messages.push({ role: 'assistant', content: responseText });
+
+    let parsed = null;
+    try {
+      const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+      if (jsonMatch) parsed = JSON.parse(jsonMatch[0]);
+    } catch (e) {}
+
+    if (parsed && parsed.type === 'email') {
+      aiChatState.generatedEmail = parsed.body;
+      const msgEl = document.createElement('div');
+      msgEl.className = 'ai-msg assistant';
+      msgEl.innerHTML = `<div>E-posta yanıtı hazır:</div><div class="ai-msg-email">${escapeHtml(parsed.body)}</div>`;
+      document.getElementById('ai-chat-messages').appendChild(msgEl);
+      document.getElementById('ai-chat-messages').scrollTop = document.getElementById('ai-chat-messages').scrollHeight;
+      document.getElementById('ai-chat-actions').style.display = 'flex';
+    } else {
+      addAiMessage('assistant', responseText);
+      if (responseText.length > 50) {
+        aiChatState.generatedEmail = responseText;
+        document.getElementById('ai-chat-actions').style.display = 'flex';
+      }
+    }
+  }).catch(err => {
+    removeAiTypingIndicator();
+    addAiMessage('system', 'Hata: ' + err.message);
+  });
+});
+
+// ============ Fix Input Field Focus Issues ============
+// Prevent overlay animations from blocking input focus
+document.addEventListener('click', (e) => {
+  const target = e.target;
+  if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT') {
+    // Force focus with a small delay to prevent animation-related focus stealing
+    setTimeout(() => {
+      if (document.activeElement !== target) {
+        target.focus();
+      }
+    }, 10);
+  }
 });
