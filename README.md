@@ -20,6 +20,7 @@
 3. **Kur** butonuna basın — kurulum 30 saniyede tamamlanır
 4. Masaüstündeki **MailLoader** ikonuna çift tıklayıp açın
 5. E-posta adresinizi, adınızı ve şifrenizi (uygulama şifresi) girin
+6. Rehber için https://www.youtube.com/watch?v=4EouT4pRnm4 videoyu izleyebilirsiniz 
 
 ---
 
