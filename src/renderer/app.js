@@ -914,6 +914,8 @@ document.addEventListener('keydown', (e) => {
       closeAiChat();
     } else if (document.getElementById('settings-panel-overlay').style.display !== 'none') {
       closeSettingsPanel();
+    } else if (document.getElementById('github-panel-overlay').style.display !== 'none') {
+      closeGithubPanel();
     } else if (document.getElementById('drive-panel-overlay').style.display !== 'none') {
       closeDrivePanel();
     } else if (document.getElementById('theme-panel-overlay').style.display !== 'none') {
@@ -1706,6 +1708,1082 @@ document.getElementById('drive-go-root')?.addEventListener('click', () => {
   loadDriveFiles(null);
 });
 
+// ============ GitHub Panel ============
+
+let githubState = {
+  currentRepo: null,
+  currentPath: '',
+  currentBranch: '',
+  currentTab: 'repos',
+  breadcrumb: [{ path: '', name: 'Repolar' }],
+  issueFilter: 'open',
+  prFilter: 'open',
+  user: null
+};
+
+const LANG_COLORS = {
+  JavaScript: '#f1e05a', TypeScript: '#3178c6', Python: '#3572A5', Java: '#b07219',
+  'C#': '#178600', 'C++': '#f34b7d', C: '#555555', Go: '#00ADD8', Rust: '#dea584',
+  Ruby: '#701516', PHP: '#4F5D95', Swift: '#F05138', Kotlin: '#A97BFF', Dart: '#00B4AB',
+  HTML: '#e34c26', CSS: '#563d7c', Shell: '#89e051', Vue: '#41b883', Svelte: '#ff3e00',
+  Lua: '#000080', R: '#198CE7', Scala: '#c22d40', Perl: '#0298c3', Haskell: '#5e5086'
+};
+
+function openGithubPanel() {
+  document.getElementById('github-panel-overlay').style.display = 'flex';
+  checkGithubConnection();
+}
+
+function closeGithubPanel() {
+  document.getElementById('github-panel-overlay').style.display = 'none';
+}
+
+document.getElementById('btn-github-tab').addEventListener('click', openGithubPanel);
+document.getElementById('btn-github-close').addEventListener('click', closeGithubPanel);
+document.getElementById('github-panel-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'github-panel-overlay') closeGithubPanel();
+});
+
+// Tab switching
+document.querySelectorAll('.gh-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    document.querySelectorAll('.gh-tab').forEach(t => t.classList.remove('active'));
+    tab.classList.add('active');
+    githubState.currentTab = tab.dataset.tab;
+    loadGithubTab();
+  });
+});
+
+function loadGithubTab() {
+  const repo = githubState.currentRepo;
+  const branchSel = document.getElementById('gh-branch-select');
+  const newBtn = document.getElementById('btn-gh-new');
+  branchSel.style.display = 'none';
+  newBtn.style.display = 'none';
+
+  switch (githubState.currentTab) {
+    case 'repos':
+      newBtn.style.display = 'flex';
+      newBtn.title = 'Yeni Repo';
+      if (!repo) { loadGithubRepos(); }
+      else { branchSel.style.display = 'inline-block'; loadGithubContents(githubState.currentPath); }
+      break;
+    case 'issues':
+      if (!repo) { showGhNeedRepo('Issues'); return; }
+      newBtn.style.display = 'flex';
+      newBtn.title = 'Yeni Issue';
+      loadGithubIssues();
+      break;
+    case 'pulls':
+      if (!repo) { showGhNeedRepo('Pull Requests'); return; }
+      loadGithubPulls();
+      break;
+    case 'commits':
+      if (!repo) { showGhNeedRepo('Commits'); return; }
+      branchSel.style.display = 'inline-block';
+      loadGithubCommits();
+      break;
+    case 'branches':
+      if (!repo) { showGhNeedRepo('Branches'); return; }
+      newBtn.style.display = 'flex';
+      newBtn.title = 'Yeni Branch';
+      loadGithubBranches();
+      break;
+    case 'gists':
+      newBtn.style.display = 'flex';
+      newBtn.title = 'Yeni Gist';
+      loadGithubGists();
+      break;
+    case 'starred':
+      loadGithubStarred();
+      break;
+    case 'search':
+      showGithubSearch();
+      break;
+  }
+}
+
+function showGhNeedRepo(label) {
+  const el = document.getElementById('gh-content');
+  el.innerHTML = `<div class="gh-empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7"/></svg><p>${label} için önce bir repo seçin</p><button class="btn-primary btn-sm" onclick="document.querySelector('.gh-tab[data-tab=repos]').click()">Replara Git</button></div>`;
+}
+
+function showGhLoading(msg) {
+  document.getElementById('gh-content').innerHTML = `<div class="loading-state"><div class="loading-spinner"></div><p>${msg || 'Yükleniyor...'}</p></div>`;
+}
+
+function showGhError(msg) {
+  document.getElementById('gh-content').innerHTML = `<div class="gh-empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg><p>${escapeHtml(msg)}</p></div>`;
+}
+
+// Connection
+async function checkGithubConnection() {
+  const connected = await window.mailAPI.githubIsConnected();
+  document.getElementById('github-not-connected').style.display = connected ? 'none' : 'flex';
+  document.getElementById('github-connected').style.display = connected ? 'flex' : 'none';
+  if (connected) {
+    githubState.currentRepo = null;
+    githubState.currentPath = '';
+    githubState.currentBranch = '';
+    githubState.currentTab = 'repos';
+    githubState.breadcrumb = [{ path: '', name: 'Repolar' }];
+    document.querySelectorAll('.gh-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector('.gh-tab[data-tab="repos"]').classList.add('active');
+    renderGithubBreadcrumb();
+    // Load user info
+    const userRes = await window.mailAPI.githubGetUser();
+    if (userRes.success) {
+      githubState.user = userRes.user;
+      const hdr = document.getElementById('gh-header-user');
+      hdr.style.display = 'flex';
+      document.getElementById('gh-user-avatar').src = userRes.user.avatar_url;
+      document.getElementById('gh-user-login').textContent = userRes.user.login;
+    }
+    loadGithubRepos();
+  } else {
+    document.getElementById('gh-header-user').style.display = 'none';
+  }
+}
+
+document.getElementById('btn-github-connect').addEventListener('click', async () => {
+  const tokenInput = document.getElementById('github-token-input');
+  const token = tokenInput.value.trim();
+  if (!token) { showToast('Token gerekli', 'error'); return; }
+  const btn = document.getElementById('btn-github-connect');
+  btn.disabled = true;
+  btn.textContent = 'Bağlanıyor...';
+  const result = await window.mailAPI.githubConnect(token);
+  const repos = await window.mailAPI.githubListRepos();
+  btn.disabled = false;
+  btn.innerHTML = `<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Bağlan`;
+  if (repos.success) {
+    tokenInput.value = '';
+    showToast('GitHub bağlandı!', 'success');
+    checkGithubConnection();
+  } else {
+    await window.mailAPI.githubDisconnect();
+    showToast('Token geçersiz: ' + repos.error, 'error');
+  }
+});
+
+document.getElementById('btn-github-disconnect-panel').addEventListener('click', async () => {
+  await window.mailAPI.githubDisconnect();
+  showToast('GitHub bağlantısı kesildi', 'info');
+  checkGithubConnection();
+});
+
+// New button handler
+document.getElementById('btn-gh-new').addEventListener('click', () => {
+  switch (githubState.currentTab) {
+    case 'repos': showCreateRepoModal(); break;
+    case 'issues': showCreateIssueModal(); break;
+    case 'branches': showCreateBranchModal(); break;
+    case 'gists': showCreateGistModal(); break;
+  }
+});
+
+// ---- REPOS TAB ----
+async function loadGithubRepos() {
+  showGhLoading('Repolar yükleniyor...');
+  const result = await window.mailAPI.githubListRepos();
+  if (!result.success) { showGhError(result.error); return; }
+  const el = document.getElementById('gh-content');
+  if (result.repos.length === 0) {
+    el.innerHTML = '<div class="gh-empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87"/></svg><p>Repo bulunamadı</p></div>';
+    return;
+  }
+  el.innerHTML = '';
+  for (const repo of result.repos) {
+    const card = document.createElement('div');
+    card.className = 'gh-repo-card';
+    const langColor = LANG_COLORS[repo.language] || '#888';
+    let badges = '';
+    if (repo.private) badges += '<span class="gh-badge gh-badge-private">Özel</span>';
+    if (repo.fork) badges += '<span class="gh-badge gh-badge-fork">Fork</span>';
+    if (repo.archived) badges += '<span class="gh-badge gh-badge-archived">Arşiv</span>';
+    card.innerHTML = `
+      <div class="gh-repo-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77"/></svg></div>
+      <div class="gh-repo-body">
+        <div class="gh-repo-title"><span class="gh-repo-name">${escapeHtml(repo.name)}</span>${badges}</div>
+        ${repo.description ? `<div class="gh-repo-desc">${escapeHtml(repo.description)}</div>` : ''}
+        <div class="gh-repo-stats">
+          ${repo.language ? `<span><span class="github-lang-dot" style="background:${langColor}"></span>${escapeHtml(repo.language)}</span>` : ''}
+          <span>⭐ ${repo.stargazers_count || 0}</span>
+          <span>🍴 ${repo.forks_count || 0}</span>
+          <span>${formatDate(repo.updated_at)}</span>
+        </div>
+      </div>
+      <div class="gh-repo-actions">
+        <button class="gh-star-btn" title="Yıldız"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button>
+        <button class="gh-fork-btn" title="Fork"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v1a2 2 0 01-2 2H8a2 2 0 01-2-2V9"/><line x1="12" y1="12" x2="12" y2="15"/></svg></button>
+        <button class="gh-zip-btn" title="ZIP İndir"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>
+        <button class="gh-open-btn" title="GitHub'da Aç"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>
+        <button class="gh-danger gh-del-btn" title="Sil"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
+      </div>
+    `;
+    // Click to browse
+    card.querySelector('.gh-repo-body').addEventListener('click', () => enterRepo(repo));
+    card.querySelector('.gh-repo-icon').addEventListener('click', () => enterRepo(repo));
+    // Star
+    const starBtn = card.querySelector('.gh-star-btn');
+    window.mailAPI.githubIsStarred(repo.owner.login, repo.name).then(r => {
+      if (r.starred) starBtn.classList.add('gh-starred');
+    });
+    starBtn.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      if (starBtn.classList.contains('gh-starred')) {
+        await window.mailAPI.githubUnstarRepo(repo.owner.login, repo.name);
+        starBtn.classList.remove('gh-starred');
+        showToast('Yıldız kaldırıldı', 'info');
+      } else {
+        await window.mailAPI.githubStarRepo(repo.owner.login, repo.name);
+        starBtn.classList.add('gh-starred');
+        showToast('Yıldız eklendi', 'success');
+      }
+    });
+    // Fork
+    card.querySelector('.gh-fork-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      showToast('Fork yapılıyor...', 'info');
+      const r = await window.mailAPI.githubForkRepo(repo.owner.login, repo.name);
+      if (r.success) showToast('Fork yapıldı: ' + r.repo.full_name, 'success');
+      else showToast('Fork hatası: ' + r.error, 'error');
+    });
+    // ZIP
+    card.querySelector('.gh-zip-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const r = await window.mailAPI.githubDownloadZip(repo.owner.login, repo.name, repo.default_branch);
+      if (r.success) showToast('ZIP indirildi', 'success');
+      else if (r.error !== 'İptal edildi') showToast('Hata: ' + r.error, 'error');
+    });
+    // Open in browser
+    card.querySelector('.gh-open-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.mailAPI.openExternal(repo.html_url);
+    });
+    // Delete
+    card.querySelector('.gh-del-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      showGhConfirmModal(`"${repo.name}" reposunu silmek istediğinize emin misiniz? Bu işlem geri alınamaz!`, async () => {
+        const r = await window.mailAPI.githubDeleteRepo(repo.owner.login, repo.name);
+        if (r.success) { showToast('Repo silindi', 'success'); loadGithubRepos(); }
+        else showToast('Silme hatası: ' + r.error, 'error');
+      });
+    });
+    el.appendChild(card);
+  }
+}
+
+function enterRepo(repo) {
+  githubState.currentRepo = {
+    owner: repo.owner.login, name: repo.name,
+    full_name: repo.full_name, default_branch: repo.default_branch,
+    html_url: repo.html_url
+  };
+  githubState.currentPath = '';
+  githubState.currentBranch = repo.default_branch;
+  githubState.breadcrumb = [
+    { path: '', name: 'Repolar' },
+    { path: '', name: repo.name }
+  ];
+  renderGithubBreadcrumb();
+  loadBranchSelector();
+  loadGithubContents('');
+}
+
+async function loadBranchSelector() {
+  const sel = document.getElementById('gh-branch-select');
+  sel.style.display = 'inline-block';
+  sel.innerHTML = '<option>Yükleniyor...</option>';
+  const repo = githubState.currentRepo;
+  const res = await window.mailAPI.githubListBranches(repo.owner, repo.name);
+  sel.innerHTML = '';
+  if (res.success) {
+    res.branches.forEach(b => {
+      const opt = document.createElement('option');
+      opt.value = b.name;
+      opt.textContent = b.name;
+      if (b.name === githubState.currentBranch) opt.selected = true;
+      sel.appendChild(opt);
+    });
+  }
+}
+
+document.getElementById('gh-branch-select').addEventListener('change', (e) => {
+  githubState.currentBranch = e.target.value;
+  if (githubState.currentTab === 'repos') {
+    loadGithubContents(githubState.currentPath);
+  } else if (githubState.currentTab === 'commits') {
+    loadGithubCommits();
+  }
+});
+
+async function loadGithubContents(pathStr) {
+  showGhLoading('Dosyalar yükleniyor...');
+  const repo = githubState.currentRepo;
+  const result = await window.mailAPI.githubListContents(repo.owner, repo.name, pathStr, githubState.currentBranch);
+  const el = document.getElementById('gh-content');
+
+  if (!result.success) { showGhError(result.error); return; }
+  if (result.files.length === 0) {
+    el.innerHTML = '<div class="gh-empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg><p>Bu klasör boş</p></div>';
+    return;
+  }
+
+  const sorted = result.files.sort((a, b) => {
+    if (a.type === 'dir' && b.type !== 'dir') return -1;
+    if (a.type !== 'dir' && b.type === 'dir') return 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  el.innerHTML = '';
+  sorted.forEach(file => {
+    const isDir = file.type === 'dir';
+    const item = document.createElement('div');
+    item.className = 'drive-file-item';
+    item.innerHTML = `
+      <div class="drive-file-icon">
+        ${isDir
+          ? '<svg width="24" height="24" viewBox="0 0 24 24" fill="var(--primary)" stroke="var(--primary)" stroke-width="1"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>'
+          : '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>'
+        }
+      </div>
+      <div class="drive-file-info">
+        <span class="drive-file-name">${escapeHtml(file.name)}</span>
+        <span class="drive-file-meta">${isDir ? 'Klasör' : formatSize(file.size || 0)}</span>
+      </div>
+      <div style="display:flex;gap:4px;">
+        ${!isDir ? `<button class="drive-download-btn gh-preview-btn" title="Önizle"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>` : ''}
+        ${!isDir && file.download_url ? `<button class="drive-download-btn" title="İndir"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>` : ''}
+        ${!isDir ? `<button class="drive-download-btn gh-del-file-btn gh-danger" title="Sil"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>` : ''}
+      </div>
+    `;
+
+    if (isDir) {
+      item.addEventListener('click', () => {
+        githubState.currentPath = file.path;
+        githubState.breadcrumb.push({ path: file.path, name: file.name });
+        renderGithubBreadcrumb();
+        loadGithubContents(file.path);
+      });
+    }
+    // Preview
+    const previewBtn = item.querySelector('.gh-preview-btn');
+    if (previewBtn) {
+      previewBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showFilePreview(file);
+      });
+    }
+    // Download
+    const dlBtn = item.querySelector('.drive-download-btn:not(.gh-preview-btn):not(.gh-del-file-btn)');
+    if (dlBtn && file.download_url) {
+      dlBtn.addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const res = await window.mailAPI.githubDownloadFile(file.download_url, file.name);
+        if (res.success) showToast('Dosya indirildi', 'success');
+        else showToast('İndirme hatası: ' + res.error, 'error');
+      });
+    }
+    // Delete file
+    const delBtn = item.querySelector('.gh-del-file-btn');
+    if (delBtn) {
+      delBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        showGhConfirmModal(`"${file.name}" dosyasını silmek istediğinize emin misiniz?`, async () => {
+          const r = await window.mailAPI.githubDeleteFile(
+            githubState.currentRepo.owner, githubState.currentRepo.name,
+            file.path, file.sha, null, githubState.currentBranch
+          );
+          if (r.success) { showToast('Dosya silindi', 'success'); loadGithubContents(githubState.currentPath); }
+          else showToast('Silme hatası: ' + r.error, 'error');
+        });
+      });
+    }
+    el.appendChild(item);
+  });
+}
+
+async function showFilePreview(file) {
+  const repo = githubState.currentRepo;
+  showGhLoading('Dosya yükleniyor...');
+  const res = await window.mailAPI.githubGetFileContent(repo.owner, repo.name, file.path, githubState.currentBranch);
+  const el = document.getElementById('gh-content');
+  if (!res.success) { showGhError(res.error); return; }
+  el.innerHTML = `
+    <div class="gh-file-preview">
+      <div class="gh-file-preview-header">
+        <span class="gh-file-preview-name">${escapeHtml(file.name)}</span>
+        <div class="gh-file-preview-actions">
+          <button class="btn-secondary btn-sm" id="gh-edit-file-btn">✏️ Düzenle</button>
+          ${file.download_url ? `<button class="btn-secondary btn-sm" id="gh-dl-preview-btn">⬇️ İndir</button>` : ''}
+          <button class="btn-secondary btn-sm" id="gh-back-from-preview">← Geri</button>
+        </div>
+      </div>
+      <div class="gh-code-block">${escapeHtml(res.content)}</div>
+    </div>
+  `;
+  document.getElementById('gh-back-from-preview').addEventListener('click', () => {
+    loadGithubContents(githubState.currentPath);
+  });
+  const dlBtn = document.getElementById('gh-dl-preview-btn');
+  if (dlBtn) {
+    dlBtn.addEventListener('click', async () => {
+      const r = await window.mailAPI.githubDownloadFile(file.download_url, file.name);
+      if (r.success) showToast('İndirildi', 'success');
+    });
+  }
+  document.getElementById('gh-edit-file-btn').addEventListener('click', () => {
+    showEditFileModal(file, res.content);
+  });
+}
+
+function showEditFileModal(file, content) {
+  openGhModal('Dosya Düzenle: ' + file.name, `
+    <div class="form-group">
+      <label>İçerik</label>
+      <textarea id="gh-edit-content" style="min-height:200px;font-family:monospace;font-size:12px;">${escapeHtml(content)}</textarea>
+    </div>
+    <div class="form-group">
+      <label>Commit Mesajı</label>
+      <input id="gh-edit-msg" placeholder="Update ${file.name}">
+    </div>
+    <div class="gh-modal-footer">
+      <button class="btn-secondary btn-sm" onclick="closeGhModal()">İptal</button>
+      <button class="btn-primary btn-sm" id="gh-save-edit">Kaydet</button>
+    </div>
+  `);
+  document.getElementById('gh-save-edit').addEventListener('click', async () => {
+    const newContent = document.getElementById('gh-edit-content').value;
+    const msg = document.getElementById('gh-edit-msg').value || `Update ${file.name}`;
+    const repo = githubState.currentRepo;
+    const r = await window.mailAPI.githubUpdateFile(repo.owner, repo.name, file.path, newContent, file.sha, msg, githubState.currentBranch);
+    closeGhModal();
+    if (r.success) { showToast('Dosya güncellendi', 'success'); loadGithubContents(githubState.currentPath); }
+    else showToast('Hata: ' + r.error, 'error');
+  });
+}
+
+// ---- ISSUES TAB ----
+async function loadGithubIssues() {
+  showGhLoading('Issues yükleniyor...');
+  const repo = githubState.currentRepo;
+  const res = await window.mailAPI.githubListIssues(repo.owner, repo.name, githubState.issueFilter);
+  const el = document.getElementById('gh-content');
+  if (!res.success) { showGhError(res.error); return; }
+
+  let html = `<div class="gh-filter-bar">
+    <button class="gh-filter-btn ${githubState.issueFilter === 'open' ? 'active' : ''}" data-state="open">🟢 Açık</button>
+    <button class="gh-filter-btn ${githubState.issueFilter === 'closed' ? 'active' : ''}" data-state="closed">🟣 Kapalı</button>
+    <button class="gh-filter-btn ${githubState.issueFilter === 'all' ? 'active' : ''}" data-state="all">Tümü</button>
+  </div>`;
+
+  if (res.issues.length === 0) {
+    html += '<div class="gh-empty"><p>Issue bulunamadı</p></div>';
+  }
+  el.innerHTML = html;
+
+  el.querySelectorAll('.gh-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      githubState.issueFilter = btn.dataset.state;
+      loadGithubIssues();
+    });
+  });
+
+  res.issues.forEach(issue => {
+    const card = document.createElement('div');
+    card.className = 'gh-issue-card';
+    const isOpen = issue.state === 'open';
+    const labelsHtml = issue.labels.map(l => `<span class="gh-label" style="background:#${l.color}22;color:#${l.color};border:1px solid #${l.color}44;">${escapeHtml(l.name)}</span>`).join('');
+    card.innerHTML = `
+      <div class="gh-issue-icon ${isOpen ? 'open' : 'closed'}">
+        ${isOpen
+          ? '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>'
+          : '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>'
+        }
+      </div>
+      <div class="gh-issue-body">
+        <div class="gh-issue-title">${escapeHtml(issue.title)} <span style="color:var(--text-tertiary);font-weight:400;">#${issue.number}</span></div>
+        <div class="gh-issue-meta">
+          <span>${escapeHtml(issue.user.login)}</span>
+          <span>${formatDate(issue.created_at)}</span>
+          ${issue.comments > 0 ? `<span>💬 ${issue.comments}</span>` : ''}
+        </div>
+        ${labelsHtml ? `<div class="gh-issue-labels">${labelsHtml}</div>` : ''}
+      </div>
+    `;
+    card.addEventListener('click', () => showIssueDetail(issue));
+    el.appendChild(card);
+  });
+}
+
+async function showIssueDetail(issue) {
+  const el = document.getElementById('gh-content');
+  const repo = githubState.currentRepo;
+  const isOpen = issue.state === 'open';
+  let html = `<div class="gh-detail-view">
+    <div class="gh-detail-header">
+      <div style="flex:1;">
+        <div class="gh-detail-title">${escapeHtml(issue.title)} <span class="gh-detail-number">#${issue.number}</span></div>
+        <div class="gh-issue-meta" style="margin-top:4px;">
+          <span class="gh-badge ${isOpen ? 'gh-badge-fork' : 'gh-badge-archived'}">${isOpen ? '🟢 Açık' : '🟣 Kapalı'}</span>
+          <span>${escapeHtml(issue.user.login)} tarafından</span>
+          <span>${formatDate(issue.created_at)}</span>
+        </div>
+      </div>
+      <button class="btn-secondary btn-sm" id="gh-back-issues">← Issues</button>
+    </div>
+    ${issue.body ? `<div class="gh-detail-body">${escapeHtml(issue.body)}</div>` : ''}
+    <div class="gh-detail-actions">
+      <button class="btn-${isOpen ? 'secondary' : 'primary'} btn-sm" id="gh-toggle-issue">${isOpen ? '🔒 Kapat' : '🔓 Yeniden Aç'}</button>
+    </div>
+    <div class="gh-comments-section">
+      <div class="gh-comments-title">💬 Yorumlar</div>
+      <div id="gh-comments-list"><div class="loading-state"><div class="loading-spinner"></div></div></div>
+      <div class="gh-comment-form">
+        <textarea id="gh-comment-input" placeholder="Yorum yazın..."></textarea>
+        <button class="btn-primary btn-sm" id="gh-send-comment">Gönder</button>
+      </div>
+    </div>
+  </div>`;
+  el.innerHTML = html;
+
+  document.getElementById('gh-back-issues').addEventListener('click', () => loadGithubIssues());
+  document.getElementById('gh-toggle-issue').addEventListener('click', async () => {
+    const newState = isOpen ? 'closed' : 'open';
+    const r = await window.mailAPI.githubUpdateIssue(repo.owner, repo.name, issue.number, { state: newState });
+    if (r.success) {
+      issue.state = newState;
+      showToast(`Issue ${newState === 'closed' ? 'kapatıldı' : 'yeniden açıldı'}`, 'success');
+      showIssueDetail(issue);
+    } else showToast('Hata: ' + r.error, 'error');
+  });
+  document.getElementById('gh-send-comment').addEventListener('click', async () => {
+    const body = document.getElementById('gh-comment-input').value.trim();
+    if (!body) return;
+    const r = await window.mailAPI.githubAddComment(repo.owner, repo.name, issue.number, body);
+    if (r.success) { document.getElementById('gh-comment-input').value = ''; showToast('Yorum eklendi', 'success'); loadIssueComments(issue.number); }
+    else showToast('Hata: ' + r.error, 'error');
+  });
+  loadIssueComments(issue.number);
+}
+
+async function loadIssueComments(issueNumber) {
+  const repo = githubState.currentRepo;
+  const listEl = document.getElementById('gh-comments-list');
+  const res = await window.mailAPI.githubListComments(repo.owner, repo.name, issueNumber);
+  if (!res.success) { listEl.innerHTML = '<p style="color:var(--text-tertiary);padding:8px;">Yorumlar yüklenemedi</p>'; return; }
+  if (res.comments.length === 0) { listEl.innerHTML = '<p style="color:var(--text-tertiary);padding:8px;font-size:12px;">Henüz yorum yok</p>'; return; }
+  listEl.innerHTML = '';
+  res.comments.forEach(c => {
+    const div = document.createElement('div');
+    div.className = 'gh-comment';
+    div.innerHTML = `
+      <img class="gh-comment-avatar" src="${c.user.avatar_url}" alt="">
+      <div class="gh-comment-body">
+        <div class="gh-comment-header"><strong>${escapeHtml(c.user.login)}</strong> · ${formatDate(c.created_at)}</div>
+        <div class="gh-comment-text">${escapeHtml(c.body)}</div>
+      </div>
+    `;
+    listEl.appendChild(div);
+  });
+}
+
+// ---- PULL REQUESTS TAB ----
+async function loadGithubPulls() {
+  showGhLoading('Pull Requests yükleniyor...');
+  const repo = githubState.currentRepo;
+  const res = await window.mailAPI.githubListPulls(repo.owner, repo.name, githubState.prFilter);
+  const el = document.getElementById('gh-content');
+  if (!res.success) { showGhError(res.error); return; }
+
+  let html = `<div class="gh-filter-bar">
+    <button class="gh-filter-btn ${githubState.prFilter === 'open' ? 'active' : ''}" data-state="open">🟢 Açık</button>
+    <button class="gh-filter-btn ${githubState.prFilter === 'closed' ? 'active' : ''}" data-state="closed">🟣 Kapalı</button>
+    <button class="gh-filter-btn ${githubState.prFilter === 'all' ? 'active' : ''}" data-state="all">Tümü</button>
+  </div>`;
+
+  if (res.pulls.length === 0) { html += '<div class="gh-empty"><p>Pull Request bulunamadı</p></div>'; }
+  el.innerHTML = html;
+
+  el.querySelectorAll('.gh-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      githubState.prFilter = btn.dataset.state;
+      loadGithubPulls();
+    });
+  });
+
+  res.pulls.forEach(pr => {
+    const card = document.createElement('div');
+    card.className = 'gh-issue-card';
+    let iconClass = 'open';
+    let icon = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>';
+    if (pr.merged_at) { iconClass = 'merged'; }
+    else if (pr.state === 'closed') { iconClass = 'closed'; }
+    else if (pr.draft) { iconClass = 'draft'; }
+
+    const labelsHtml = pr.labels.map(l => `<span class="gh-label" style="background:#${l.color}22;color:#${l.color};border:1px solid #${l.color}44;">${escapeHtml(l.name)}</span>`).join('');
+    card.innerHTML = `
+      <div class="gh-issue-icon ${iconClass}">${icon}</div>
+      <div class="gh-issue-body">
+        <div class="gh-issue-title">${escapeHtml(pr.title)} <span style="color:var(--text-tertiary);font-weight:400;">#${pr.number}</span>${pr.draft ? '<span class="gh-badge gh-badge-fork" style="margin-left:6px;">Draft</span>' : ''}</div>
+        <div class="gh-issue-meta">
+          <span>${escapeHtml(pr.user.login)}</span>
+          <span>${escapeHtml(pr.head.ref)} → ${escapeHtml(pr.base.ref)}</span>
+          <span>${formatDate(pr.created_at)}</span>
+        </div>
+        ${labelsHtml ? `<div class="gh-issue-labels">${labelsHtml}</div>` : ''}
+      </div>
+    `;
+    card.addEventListener('click', () => showPrDetail(pr));
+    el.appendChild(card);
+  });
+}
+
+async function showPrDetail(pr) {
+  const el = document.getElementById('gh-content');
+  const repo = githubState.currentRepo;
+  let statusText = '🟢 Açık';
+  if (pr.merged_at) statusText = '🟣 Merged';
+  else if (pr.state === 'closed') statusText = '🔴 Kapalı';
+
+  el.innerHTML = `<div class="gh-detail-view">
+    <div class="gh-detail-header">
+      <div style="flex:1;">
+        <div class="gh-detail-title">${escapeHtml(pr.title)} <span class="gh-detail-number">#${pr.number}</span></div>
+        <div class="gh-issue-meta" style="margin-top:4px;">
+          <span class="gh-badge gh-badge-fork">${statusText}</span>
+          <span>${escapeHtml(pr.user.login)}</span>
+          <span>${escapeHtml(pr.head.ref)} → ${escapeHtml(pr.base.ref)}</span>
+        </div>
+      </div>
+      <button class="btn-secondary btn-sm" id="gh-back-prs">← PR'ler</button>
+    </div>
+    ${pr.body ? `<div class="gh-detail-body">${escapeHtml(pr.body)}</div>` : ''}
+    <div class="gh-comments-section">
+      <div class="gh-comments-title">💬 Yorumlar</div>
+      <div id="gh-comments-list"><div class="loading-state"><div class="loading-spinner"></div></div></div>
+      <div class="gh-comment-form">
+        <textarea id="gh-comment-input" placeholder="Yorum yazın..."></textarea>
+        <button class="btn-primary btn-sm" id="gh-send-comment">Gönder</button>
+      </div>
+    </div>
+  </div>`;
+
+  document.getElementById('gh-back-prs').addEventListener('click', () => loadGithubPulls());
+  document.getElementById('gh-send-comment').addEventListener('click', async () => {
+    const body = document.getElementById('gh-comment-input').value.trim();
+    if (!body) return;
+    const r = await window.mailAPI.githubAddComment(repo.owner, repo.name, pr.number, body);
+    if (r.success) { document.getElementById('gh-comment-input').value = ''; showToast('Yorum eklendi', 'success'); loadIssueComments(pr.number); }
+    else showToast('Hata: ' + r.error, 'error');
+  });
+  loadIssueComments(pr.number);
+}
+
+// ---- COMMITS TAB ----
+async function loadGithubCommits() {
+  showGhLoading('Commits yükleniyor...');
+  const repo = githubState.currentRepo;
+  const res = await window.mailAPI.githubListCommits(repo.owner, repo.name, githubState.currentBranch);
+  const el = document.getElementById('gh-content');
+  if (!res.success) { showGhError(res.error); return; }
+  if (res.commits.length === 0) { el.innerHTML = '<div class="gh-empty"><p>Commit bulunamadı</p></div>'; return; }
+  el.innerHTML = '';
+  res.commits.forEach(commit => {
+    const item = document.createElement('div');
+    item.className = 'gh-commit-item';
+    const msgLines = commit.message.split('\n');
+    const firstLine = msgLines[0];
+    item.innerHTML = `
+      ${commit.author.avatar_url ? `<img class="gh-commit-avatar" src="${commit.author.avatar_url}" alt="">` : '<div class="gh-commit-avatar" style="background:var(--bg-secondary);display:flex;align-items:center;justify-content:center;font-size:11px;">?</div>'}
+      <div class="gh-commit-body">
+        <div class="gh-commit-msg">${escapeHtml(firstLine)}</div>
+        <div class="gh-commit-info">${escapeHtml(commit.author.login)} · ${formatDate(commit.date)}</div>
+      </div>
+      <span class="gh-commit-sha">${commit.sha.substring(0, 7)}</span>
+    `;
+    el.appendChild(item);
+  });
+}
+
+// ---- BRANCHES TAB ----
+async function loadGithubBranches() {
+  showGhLoading('Branches yükleniyor...');
+  const repo = githubState.currentRepo;
+  const res = await window.mailAPI.githubListBranches(repo.owner, repo.name);
+  const el = document.getElementById('gh-content');
+  if (!res.success) { showGhError(res.error); return; }
+  if (res.branches.length === 0) { el.innerHTML = '<div class="gh-empty"><p>Branch bulunamadı</p></div>'; return; }
+  el.innerHTML = '';
+  res.branches.forEach(branch => {
+    const item = document.createElement('div');
+    item.className = 'gh-branch-item';
+    const isDefault = branch.name === repo.default_branch;
+    item.innerHTML = `
+      <div class="gh-branch-name">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/></svg>
+        ${escapeHtml(branch.name)}
+        ${isDefault ? '<span class="gh-branch-default">default</span>' : ''}
+        ${branch.protected ? '<span class="gh-branch-protected">protected</span>' : ''}
+      </div>
+      <div class="gh-repo-actions">
+        <button class="gh-use-branch" title="Bu branch'ı kullan"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg></button>
+        ${!isDefault && !branch.protected ? `<button class="gh-danger gh-del-branch" title="Sil"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>` : ''}
+      </div>
+    `;
+    item.querySelector('.gh-use-branch').addEventListener('click', () => {
+      githubState.currentBranch = branch.name;
+      document.getElementById('gh-branch-select').value = branch.name;
+      document.querySelector('.gh-tab[data-tab="repos"]').click();
+      showToast(`Branch: ${branch.name}`, 'info');
+    });
+    const delBtn = item.querySelector('.gh-del-branch');
+    if (delBtn) {
+      delBtn.addEventListener('click', () => {
+        showGhConfirmModal(`"${branch.name}" branch'ını silmek istediğinize emin misiniz?`, async () => {
+          const r = await window.mailAPI.githubDeleteBranch(repo.owner, repo.name, branch.name);
+          if (r.success) { showToast('Branch silindi', 'success'); loadGithubBranches(); }
+          else showToast('Hata: ' + r.error, 'error');
+        });
+      });
+    }
+    el.appendChild(item);
+  });
+}
+
+// ---- GISTS TAB ----
+async function loadGithubGists() {
+  showGhLoading('Gists yükleniyor...');
+  const res = await window.mailAPI.githubListGists();
+  const el = document.getElementById('gh-content');
+  if (!res.success) { showGhError(res.error); return; }
+  if (res.gists.length === 0) { el.innerHTML = '<div class="gh-empty"><p>Gist bulunamadı</p></div>'; return; }
+  el.innerHTML = '';
+  res.gists.forEach(gist => {
+    const item = document.createElement('div');
+    item.className = 'gh-gist-item';
+    item.innerHTML = `
+      <div class="gh-gist-icon"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+      <div class="gh-gist-body">
+        <div class="gh-gist-desc">${escapeHtml(gist.description)}</div>
+        <div class="gh-gist-files">${gist.files.map(f => escapeHtml(f)).join(', ')} · ${gist.public ? 'Public' : 'Secret'} · ${formatDate(gist.created_at)}</div>
+      </div>
+      <div class="gh-repo-actions">
+        <button class="gh-gist-open" title="Aç"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>
+        <button class="gh-danger gh-gist-del" title="Sil"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/></svg></button>
+      </div>
+    `;
+    item.querySelector('.gh-gist-open').addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.mailAPI.openExternal(gist.html_url);
+    });
+    item.querySelector('.gh-gist-del').addEventListener('click', (e) => {
+      e.stopPropagation();
+      showGhConfirmModal('Bu gist\'i silmek istediğinize emin misiniz?', async () => {
+        const r = await window.mailAPI.githubDeleteGist(gist.id);
+        if (r.success) { showToast('Gist silindi', 'success'); loadGithubGists(); }
+        else showToast('Hata: ' + r.error, 'error');
+      });
+    });
+    el.appendChild(item);
+  });
+}
+
+// ---- STARRED TAB ----
+async function loadGithubStarred() {
+  showGhLoading('Starred repolar yükleniyor...');
+  const res = await window.mailAPI.githubListStarred();
+  const el = document.getElementById('gh-content');
+  if (!res.success) { showGhError(res.error); return; }
+  if (res.repos.length === 0) { el.innerHTML = '<div class="gh-empty"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><p>Starred repo bulunamadı</p></div>'; return; }
+  el.innerHTML = '';
+  res.repos.forEach(repo => {
+    const card = document.createElement('div');
+    card.className = 'gh-repo-card';
+    const langColor = LANG_COLORS[repo.language] || '#888';
+    card.innerHTML = `
+      <div class="gh-repo-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></div>
+      <div class="gh-repo-body">
+        <div class="gh-repo-title"><span class="gh-repo-name">${escapeHtml(repo.full_name)}</span></div>
+        ${repo.description ? `<div class="gh-repo-desc">${escapeHtml(repo.description)}</div>` : ''}
+        <div class="gh-repo-stats">
+          ${repo.language ? `<span><span class="github-lang-dot" style="background:${langColor}"></span>${escapeHtml(repo.language)}</span>` : ''}
+          <span>⭐ ${repo.stargazers_count || 0}</span>
+        </div>
+      </div>
+      <div class="gh-repo-actions">
+        <button class="gh-unstar-btn" title="Yıldızı Kaldır"><svg width="14" height="14" viewBox="0 0 24 24" fill="#f0c000" stroke="#f0c000" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button>
+        <button class="gh-open-btn" title="GitHub'da Aç"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>
+      </div>
+    `;
+    card.querySelector('.gh-repo-body').addEventListener('click', () => {
+      enterRepo(repo);
+      document.querySelectorAll('.gh-tab').forEach(t => t.classList.remove('active'));
+      document.querySelector('.gh-tab[data-tab="repos"]').classList.add('active');
+      githubState.currentTab = 'repos';
+    });
+    card.querySelector('.gh-unstar-btn').addEventListener('click', async (e) => {
+      e.stopPropagation();
+      await window.mailAPI.githubUnstarRepo(repo.owner.login, repo.name);
+      showToast('Yıldız kaldırıldı', 'info');
+      loadGithubStarred();
+    });
+    card.querySelector('.gh-open-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      window.mailAPI.openExternal(repo.html_url);
+    });
+    el.appendChild(card);
+  });
+}
+
+// ---- SEARCH TAB ----
+function showGithubSearch() {
+  const el = document.getElementById('gh-content');
+  el.innerHTML = `
+    <div class="gh-search-bar">
+      <input type="text" id="gh-search-input" placeholder="Repo ara... (ör: react, vue, electron)">
+      <button class="btn-primary btn-sm" id="gh-search-btn">Ara</button>
+    </div>
+    <div id="gh-search-results"></div>
+  `;
+  const doSearch = async () => {
+    const q = document.getElementById('gh-search-input').value.trim();
+    if (!q) return;
+    const results = document.getElementById('gh-search-results');
+    results.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Aranıyor...</p></div>';
+    const res = await window.mailAPI.githubSearchRepos(q);
+    if (!res.success) { results.innerHTML = `<div class="gh-empty"><p>${escapeHtml(res.error)}</p></div>`; return; }
+    if (res.repos.length === 0) { results.innerHTML = '<div class="gh-empty"><p>Sonuç bulunamadı</p></div>'; return; }
+    results.innerHTML = '';
+    res.repos.forEach(repo => {
+      const card = document.createElement('div');
+      card.className = 'gh-repo-card';
+      const langColor = LANG_COLORS[repo.language] || '#888';
+      card.innerHTML = `
+        <div class="gh-repo-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--text-secondary)" stroke-width="1.5"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7"/></svg></div>
+        <div class="gh-repo-body">
+          <div class="gh-repo-title"><span class="gh-repo-name">${escapeHtml(repo.full_name)}</span></div>
+          ${repo.description ? `<div class="gh-repo-desc">${escapeHtml(repo.description)}</div>` : ''}
+          <div class="gh-repo-stats">
+            ${repo.language ? `<span><span class="github-lang-dot" style="background:${langColor}"></span>${escapeHtml(repo.language)}</span>` : ''}
+            <span>⭐ ${repo.stargazers_count || 0}</span>
+            <span>🍴 ${repo.forks_count || 0}</span>
+          </div>
+        </div>
+        <div class="gh-repo-actions">
+          <button class="gh-star-search" title="Star"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg></button>
+          <button class="gh-fork-search" title="Fork"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><circle cx="18" cy="6" r="3"/><path d="M18 9v1a2 2 0 01-2 2H8a2 2 0 01-2-2V9"/><line x1="12" y1="12" x2="12" y2="15"/></svg></button>
+          <button class="gh-open-search" title="Aç"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>
+        </div>
+      `;
+      card.querySelector('.gh-star-search').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        await window.mailAPI.githubStarRepo(repo.owner.login, repo.name);
+        showToast('Starred!', 'success');
+      });
+      card.querySelector('.gh-fork-search').addEventListener('click', async (e) => {
+        e.stopPropagation();
+        const r = await window.mailAPI.githubForkRepo(repo.owner.login, repo.name);
+        if (r.success) showToast('Fork yapıldı!', 'success');
+        else showToast('Hata: ' + r.error, 'error');
+      });
+      card.querySelector('.gh-open-search').addEventListener('click', (e) => {
+        e.stopPropagation();
+        window.mailAPI.openExternal(repo.html_url);
+      });
+      results.appendChild(card);
+    });
+  };
+  document.getElementById('gh-search-btn').addEventListener('click', doSearch);
+  document.getElementById('gh-search-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') doSearch();
+  });
+}
+
+// ---- MODALS ----
+function openGhModal(title, bodyHtml) {
+  document.getElementById('gh-modal-title').textContent = title;
+  document.getElementById('gh-modal-body').innerHTML = bodyHtml;
+  document.getElementById('gh-modal-overlay').style.display = 'flex';
+}
+function closeGhModal() {
+  document.getElementById('gh-modal-overlay').style.display = 'none';
+}
+document.getElementById('btn-gh-modal-close').addEventListener('click', closeGhModal);
+document.getElementById('gh-modal-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'gh-modal-overlay') closeGhModal();
+});
+
+function showGhConfirmModal(message, onConfirm) {
+  openGhModal('Onay', `
+    <p style="margin-bottom:16px;">${message}</p>
+    <div class="gh-modal-footer">
+      <button class="btn-secondary btn-sm" id="gh-confirm-cancel">İptal</button>
+      <button class="btn-primary btn-sm" id="gh-confirm-ok" style="background:var(--danger);border-color:var(--danger);">Evet, Sil</button>
+    </div>
+  `);
+  document.getElementById('gh-confirm-cancel').addEventListener('click', closeGhModal);
+  document.getElementById('gh-confirm-ok').addEventListener('click', () => {
+    closeGhModal();
+    onConfirm();
+  });
+}
+
+function showCreateRepoModal() {
+  openGhModal('Yeni Repo Oluştur', `
+    <div class="form-group"><label>Repo Adı</label><input id="gh-new-repo-name" placeholder="my-project"></div>
+    <div class="form-group"><label>Açıklama</label><input id="gh-new-repo-desc" placeholder="İsteğe bağlı"></div>
+    <div class="form-group"><label><input type="checkbox" id="gh-new-repo-private"> Özel repo</label></div>
+    <div class="gh-modal-footer">
+      <button class="btn-secondary btn-sm" onclick="closeGhModal()">İptal</button>
+      <button class="btn-primary btn-sm" id="gh-create-repo-btn">Oluştur</button>
+    </div>
+  `);
+  document.getElementById('gh-create-repo-btn').addEventListener('click', async () => {
+    const name = document.getElementById('gh-new-repo-name').value.trim();
+    if (!name) { showToast('Repo adı gerekli', 'error'); return; }
+    const desc = document.getElementById('gh-new-repo-desc').value.trim();
+    const priv = document.getElementById('gh-new-repo-private').checked;
+    const r = await window.mailAPI.githubCreateRepo(name, desc, priv);
+    closeGhModal();
+    if (r.success) { showToast('Repo oluşturuldu: ' + r.repo.name, 'success'); loadGithubRepos(); }
+    else showToast('Hata: ' + r.error, 'error');
+  });
+}
+
+function showCreateIssueModal() {
+  const repo = githubState.currentRepo;
+  openGhModal('Yeni Issue', `
+    <div class="form-group"><label>Başlık</label><input id="gh-new-issue-title" placeholder="Bug: ..."></div>
+    <div class="form-group"><label>Açıklama</label><textarea id="gh-new-issue-body" placeholder="Detaylı açıklama..."></textarea></div>
+    <div class="form-group"><label>Etiketler (virgülle ayırın)</label><input id="gh-new-issue-labels" placeholder="bug, help wanted"></div>
+    <div class="gh-modal-footer">
+      <button class="btn-secondary btn-sm" onclick="closeGhModal()">İptal</button>
+      <button class="btn-primary btn-sm" id="gh-create-issue-btn">Oluştur</button>
+    </div>
+  `);
+  document.getElementById('gh-create-issue-btn').addEventListener('click', async () => {
+    const title = document.getElementById('gh-new-issue-title').value.trim();
+    if (!title) { showToast('Başlık gerekli', 'error'); return; }
+    const body = document.getElementById('gh-new-issue-body').value;
+    const labelsStr = document.getElementById('gh-new-issue-labels').value;
+    const labels = labelsStr ? labelsStr.split(',').map(l => l.trim()).filter(Boolean) : [];
+    const r = await window.mailAPI.githubCreateIssue(repo.owner, repo.name, title, body, labels);
+    closeGhModal();
+    if (r.success) { showToast('Issue oluşturuldu: #' + r.issue.number, 'success'); loadGithubIssues(); }
+    else showToast('Hata: ' + r.error, 'error');
+  });
+}
+
+function showCreateBranchModal() {
+  const repo = githubState.currentRepo;
+  openGhModal('Yeni Branch', `
+    <div class="form-group"><label>Branch Adı</label><input id="gh-new-branch-name" placeholder="feature/yeni-ozellik"></div>
+    <div class="form-group"><label>Kaynak Branch</label><select id="gh-new-branch-source"><option>Yükleniyor...</option></select></div>
+    <div class="gh-modal-footer">
+      <button class="btn-secondary btn-sm" onclick="closeGhModal()">İptal</button>
+      <button class="btn-primary btn-sm" id="gh-create-branch-btn">Oluştur</button>
+    </div>
+  `);
+  // Load branches for source
+  window.mailAPI.githubListBranches(repo.owner, repo.name).then(res => {
+    const sel = document.getElementById('gh-new-branch-source');
+    sel.innerHTML = '';
+    if (res.success) {
+      res.branches.forEach(b => {
+        const opt = document.createElement('option');
+        opt.value = b.sha;
+        opt.textContent = b.name;
+        if (b.name === repo.default_branch) opt.selected = true;
+        sel.appendChild(opt);
+      });
+    }
+  });
+  document.getElementById('gh-create-branch-btn').addEventListener('click', async () => {
+    const name = document.getElementById('gh-new-branch-name').value.trim();
+    if (!name) { showToast('Branch adı gerekli', 'error'); return; }
+    const sha = document.getElementById('gh-new-branch-source').value;
+    const r = await window.mailAPI.githubCreateBranch(repo.owner, repo.name, name, sha);
+    closeGhModal();
+    if (r.success) { showToast('Branch oluşturuldu', 'success'); loadGithubBranches(); }
+    else showToast('Hata: ' + r.error, 'error');
+  });
+}
+
+function showCreateGistModal() {
+  openGhModal('Yeni Gist', `
+    <div class="form-group"><label>Açıklama</label><input id="gh-new-gist-desc" placeholder="Gist açıklaması"></div>
+    <div class="form-group"><label>Dosya Adı</label><input id="gh-new-gist-file" placeholder="snippet.js"></div>
+    <div class="form-group"><label>İçerik</label><textarea id="gh-new-gist-content" style="min-height:120px;font-family:monospace;" placeholder="console.log('Hello');"></textarea></div>
+    <div class="form-group"><label><input type="checkbox" id="gh-new-gist-public"> Public gist</label></div>
+    <div class="gh-modal-footer">
+      <button class="btn-secondary btn-sm" onclick="closeGhModal()">İptal</button>
+      <button class="btn-primary btn-sm" id="gh-create-gist-btn">Oluştur</button>
+    </div>
+  `);
+  document.getElementById('gh-create-gist-btn').addEventListener('click', async () => {
+    const desc = document.getElementById('gh-new-gist-desc').value.trim();
+    const file = document.getElementById('gh-new-gist-file').value.trim();
+    const content = document.getElementById('gh-new-gist-content').value;
+    if (!file || !content) { showToast('Dosya adı ve içerik gerekli', 'error'); return; }
+    const isPublic = document.getElementById('gh-new-gist-public').checked;
+    const r = await window.mailAPI.githubCreateGist(desc, file, content, isPublic);
+    closeGhModal();
+    if (r.success) { showToast('Gist oluşturuldu', 'success'); loadGithubGists(); }
+    else showToast('Hata: ' + r.error, 'error');
+  });
+}
+
+// ---- BREADCRUMB ----
+function renderGithubBreadcrumb() {
+  const container = document.getElementById('github-breadcrumb');
+  container.innerHTML = '';
+  githubState.breadcrumb.forEach((item, idx) => {
+    const span = document.createElement('span');
+    span.className = 'drive-breadcrumb-item';
+    span.textContent = item.name;
+    if (idx < githubState.breadcrumb.length - 1) {
+      span.style.cursor = 'pointer';
+      span.style.opacity = '0.7';
+      span.addEventListener('click', () => {
+        githubState.breadcrumb = githubState.breadcrumb.slice(0, idx + 1);
+        if (idx === 0) {
+          githubState.currentRepo = null;
+          githubState.currentPath = '';
+          document.getElementById('gh-branch-select').style.display = 'none';
+          renderGithubBreadcrumb();
+          loadGithubRepos();
+        } else {
+          githubState.currentPath = item.path;
+          renderGithubBreadcrumb();
+          loadGithubContents(item.path);
+        }
+      });
+    }
+    container.appendChild(span);
+    if (idx < githubState.breadcrumb.length - 1) {
+      const sep = document.createElement('span');
+      sep.className = 'drive-breadcrumb-sep';
+      sep.textContent = ' / ';
+      container.appendChild(sep);
+    }
+  });
+}
+
+document.getElementById('btn-github-refresh').addEventListener('click', () => {
+  loadGithubTab();
+});
+
+document.getElementById('github-go-repos')?.addEventListener('click', () => {
+  githubState.currentRepo = null;
+  githubState.currentPath = '';
+  githubState.breadcrumb = [{ path: '', name: 'Repolar' }];
+  document.getElementById('gh-branch-select').style.display = 'none';
+  renderGithubBreadcrumb();
+  loadGithubRepos();
+});
+
 // ============ Notification Popup (WhatsApp-style) ============
 
 let notifPopupTimeout = null;
@@ -1758,6 +2836,2089 @@ document.getElementById('notification-popup-close').addEventListener('click', (e
 // Listen for notification from main process
 window.mailAPI.onNotificationPopup((data) => {
   showNotificationPopup(data);
+});
+
+// ============ TCMB EVDS Panel ============
+
+const EVDS_CATEGORY_ICONS = {
+  1: '💱', 2: '💱', 3: '📊', 4: '💰', 5: '📈', 6: '🏠', 7: '🏗️', 8: '💳',
+  9: '📉', 10: '🏦', 11: '📋', 12: '🌍', 13: '📦', 14: '👥', 15: '🏭',
+  16: '🔧', 17: '🛒', 18: '⚡', 19: '🚗', 20: '🏢', 21: '📑', 22: '🔬',
+  23: '📐', 24: '🎯', 25: '🏛️', 26: '🌐'
+};
+
+let evdsState = {
+  view: 'categories', // categories | datagroups | series
+  categories: [],
+  currentCategory: null,
+  currentGroup: null,
+  selectedSeries: null
+};
+
+function openEvdsPanel() {
+  document.getElementById('evds-panel-overlay').style.display = 'flex';
+  checkEvdsConnection();
+}
+
+function closeEvdsPanel() {
+  document.getElementById('evds-panel-overlay').style.display = 'none';
+}
+
+document.getElementById('btn-evds-tab').addEventListener('click', openEvdsPanel);
+document.getElementById('btn-evds-close').addEventListener('click', closeEvdsPanel);
+document.getElementById('evds-panel-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'evds-panel-overlay') closeEvdsPanel();
+});
+
+async function checkEvdsConnection() {
+  const connected = await window.mailAPI.evdsIsConnected();
+  document.getElementById('evds-not-connected').style.display = connected ? 'none' : 'block';
+  document.getElementById('evds-connected').style.display = connected ? 'flex' : 'none';
+  if (connected) {
+    evdsState.view = 'categories';
+    loadEvdsCategories();
+  }
+}
+
+document.getElementById('btn-evds-connect').addEventListener('click', async () => {
+  const apiKey = document.getElementById('evds-api-key-input').value.trim();
+  if (!apiKey) return;
+  const btn = document.getElementById('btn-evds-connect');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="loading-spinner" style="width:16px;height:16px;"></div> Bağlanıyor...';
+  const result = await window.mailAPI.evdsConnect(apiKey);
+  if (result.success) {
+    document.getElementById('evds-api-key-input').value = '';
+    checkEvdsConnection();
+  } else {
+    alert('Bağlantı hatası: ' + result.error);
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Bağlan';
+});
+
+document.getElementById('btn-evds-disconnect-panel').addEventListener('click', async () => {
+  await window.mailAPI.evdsDisconnect();
+  evdsState = { view: 'categories', categories: [], currentCategory: null, currentGroup: null, selectedSeries: null };
+  checkEvdsConnection();
+});
+
+document.getElementById('btn-evds-refresh').addEventListener('click', () => {
+  if (evdsState.view === 'categories') loadEvdsCategories();
+  else if (evdsState.view === 'datagroups') loadEvdsDatagroups(evdsState.currentCategory);
+  else if (evdsState.view === 'series') loadEvdsSeriesList(evdsState.currentGroup);
+});
+
+document.getElementById('evds-go-categories').addEventListener('click', () => {
+  evdsState.view = 'categories';
+  evdsState.currentCategory = null;
+  evdsState.currentGroup = null;
+  evdsState.selectedSeries = null;
+  document.getElementById('evds-data-viewer').style.display = 'none';
+  updateEvdsBreadcrumb();
+  loadEvdsCategories();
+});
+
+function updateEvdsBreadcrumb() {
+  const bc = document.getElementById('evds-breadcrumb');
+  let html = '<span class="evds-bc-item evds-bc-root" id="evds-go-categories">Kategoriler</span>';
+  if (evdsState.currentCategory) {
+    html += '<span class="evds-bc-sep">›</span>';
+    if (evdsState.currentGroup) {
+      html += `<span class="evds-bc-item" data-cat-id="${evdsState.currentCategory.id}">${evdsState.currentCategory.titleTr}</span>`;
+      html += '<span class="evds-bc-sep">›</span>';
+      html += `<span class="evds-bc-item evds-bc-current">${evdsState.currentGroup.nameTr}</span>`;
+    } else {
+      html += `<span class="evds-bc-item evds-bc-current">${evdsState.currentCategory.titleTr}</span>`;
+    }
+  }
+  bc.innerHTML = html;
+
+  // Re-bind breadcrumb click events
+  const catRoot = bc.querySelector('#evds-go-categories, .evds-bc-root');
+  if (catRoot) {
+    catRoot.addEventListener('click', () => {
+      evdsState.view = 'categories';
+      evdsState.currentCategory = null;
+      evdsState.currentGroup = null;
+      evdsState.selectedSeries = null;
+      document.getElementById('evds-data-viewer').style.display = 'none';
+      updateEvdsBreadcrumb();
+      loadEvdsCategories();
+    });
+  }
+  const catLink = bc.querySelector('[data-cat-id]');
+  if (catLink) {
+    catLink.addEventListener('click', () => {
+      evdsState.view = 'datagroups';
+      evdsState.currentGroup = null;
+      evdsState.selectedSeries = null;
+      document.getElementById('evds-data-viewer').style.display = 'none';
+      updateEvdsBreadcrumb();
+      loadEvdsDatagroups(evdsState.currentCategory);
+    });
+  }
+}
+
+async function loadEvdsCategories() {
+  const content = document.getElementById('evds-content');
+  content.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Kategoriler yükleniyor...</p></div>';
+  updateEvdsBreadcrumb();
+
+  const result = await window.mailAPI.evdsGetCategories();
+  if (!result.success) {
+    content.innerHTML = `<div class="evds-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+
+  evdsState.categories = result.categories;
+
+  if (result.categories.length === 0) {
+    content.innerHTML = '<div class="evds-empty"><p>Kategori bulunamadı.</p></div>';
+    return;
+  }
+
+  content.innerHTML = '<div class="evds-cat-grid">' + result.categories.map(cat => `
+    <div class="evds-cat-card" data-cat-id="${cat.id}">
+      <span class="evds-cat-card-id">${EVDS_CATEGORY_ICONS[cat.id] || '📊'} Kategori ${cat.id}</span>
+      <div class="evds-cat-card-title">${escapeHtml(cat.titleTr)}</div>
+      <div class="evds-cat-card-title-eng">${escapeHtml(cat.titleEng || '')}</div>
+    </div>
+  `).join('') + '</div>';
+
+  content.querySelectorAll('.evds-cat-card').forEach(card => {
+    card.addEventListener('click', () => {
+      const catId = card.dataset.catId;
+      const cat = result.categories.find(c => String(c.id) === catId);
+      evdsState.currentCategory = cat;
+      evdsState.view = 'datagroups';
+      loadEvdsDatagroups(cat);
+    });
+  });
+}
+
+async function loadEvdsDatagroups(category) {
+  const content = document.getElementById('evds-content');
+  content.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Veri grupları yükleniyor...</p></div>';
+  updateEvdsBreadcrumb();
+
+  const result = await window.mailAPI.evdsGetDatagroups(category.id);
+  if (!result.success) {
+    content.innerHTML = `<div class="evds-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+
+  if (result.groups.length === 0) {
+    content.innerHTML = '<div class="evds-empty"><p>Bu kategoride veri grubu bulunamadı.</p></div>';
+    return;
+  }
+
+  content.innerHTML = '<div class="evds-group-list">' + result.groups.map(g => `
+    <div class="evds-group-item" data-code="${escapeHtml(g.code)}">
+      <div class="evds-group-left">
+        <div class="evds-group-name">${escapeHtml(g.nameTr)}</div>
+        <div class="evds-group-code">${escapeHtml(g.code)}</div>
+      </div>
+      <div class="evds-group-meta">
+        <span>📅 ${g.frequency || '-'}</span>
+        <span>${g.startDate || ''} → ${g.endDate || ''}</span>
+      </div>
+    </div>
+  `).join('') + '</div>';
+
+  content.querySelectorAll('.evds-group-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const code = item.dataset.code;
+      const group = result.groups.find(g => g.code === code);
+      evdsState.currentGroup = group;
+      evdsState.view = 'series';
+      loadEvdsSeriesList(group);
+    });
+  });
+}
+
+async function loadEvdsSeriesList(group) {
+  const content = document.getElementById('evds-content');
+  content.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Seriler yükleniyor...</p></div>';
+  updateEvdsBreadcrumb();
+
+  const result = await window.mailAPI.evdsGetSeriesList(group.code);
+  if (!result.success) {
+    content.innerHTML = `<div class="evds-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+
+  if (result.series.length === 0) {
+    content.innerHTML = '<div class="evds-empty"><p>Bu grupta seri bulunamadı.</p></div>';
+    return;
+  }
+
+  content.innerHTML = '<div class="evds-series-list">' + result.series.map(s => `
+    <div class="evds-series-item" data-code="${escapeHtml(s.code)}">
+      <div class="evds-series-name">${escapeHtml(s.nameTr)}</div>
+      <div class="evds-series-code">${escapeHtml(s.code)}</div>
+      <div class="evds-series-info">
+        <span>📅 ${s.frequency || '-'}</span>
+        <span>📆 ${s.startDate || ''} → ${s.endDate || ''}</span>
+        <span>📊 ${s.aggregation || '-'}</span>
+      </div>
+    </div>
+  `).join('') + '</div>';
+
+  // Show data viewer
+  document.getElementById('evds-data-viewer').style.display = 'block';
+  const today = new Date().toISOString().split('T')[0];
+  document.getElementById('evds-end-date').value = today;
+
+  content.querySelectorAll('.evds-series-item').forEach(item => {
+    item.addEventListener('click', () => {
+      content.querySelectorAll('.evds-series-item').forEach(i => i.classList.remove('selected'));
+      item.classList.add('selected');
+      evdsState.selectedSeries = result.series.find(s => s.code === item.dataset.code);
+    });
+  });
+
+  // Auto-select first series
+  if (result.series.length > 0) {
+    content.querySelector('.evds-series-item').classList.add('selected');
+    evdsState.selectedSeries = result.series[0];
+  }
+}
+
+document.getElementById('btn-evds-fetch-data').addEventListener('click', async () => {
+  if (!evdsState.selectedSeries) {
+    alert('Lütfen önce bir seri seçin.');
+    return;
+  }
+
+  const startEl = document.getElementById('evds-start-date');
+  const endEl = document.getElementById('evds-end-date');
+  const freqEl = document.getElementById('evds-frequency');
+  const wrap = document.getElementById('evds-data-table-wrap');
+
+  // Convert YYYY-MM-DD to DD-MM-YYYY
+  const startDate = startEl.value ? startEl.value.split('-').reverse().join('-') : '01-01-2020';
+  const endDate = endEl.value ? endEl.value.split('-').reverse().join('-') : '';
+  const frequency = freqEl.value || null;
+
+  wrap.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Veri getiriliyor...</p></div>';
+
+  const result = await window.mailAPI.evdsGetSeriesData(
+    evdsState.selectedSeries.code,
+    startDate,
+    endDate,
+    frequency
+  );
+
+  if (!result.success) {
+    wrap.innerHTML = `<div class="evds-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+
+  if (!result.data || result.data.length === 0) {
+    wrap.innerHTML = '<div class="evds-empty"><p>Bu tarih aralığında veri bulunamadı.</p></div>';
+    return;
+  }
+
+  // Build table from data
+  const items = result.data;
+  const allKeys = Object.keys(items[0]).filter(k => k !== 'UNIXTIME');
+  const dateKey = allKeys.find(k => k === 'Tarih' || k === 'YEARWEEK') || allKeys[0];
+  const dataKeys = allKeys.filter(k => k !== dateKey);
+
+  let html = `<div class="evds-data-count">${items.length} kayıt gösteriliyor</div>`;
+  html += '<table class="evds-data-table"><thead><tr>';
+  html += `<th>Tarih</th>`;
+  dataKeys.forEach(k => {
+    html += `<th>${escapeHtml(k)}</th>`;
+  });
+  html += '</tr></thead><tbody>';
+
+  items.forEach(row => {
+    html += '<tr>';
+    html += `<td>${escapeHtml(String(row[dateKey] || ''))}</td>`;
+    dataKeys.forEach(k => {
+      const val = row[k];
+      if (val === null || val === undefined || val === '') {
+        html += '<td>-</td>';
+      } else {
+        const num = parseFloat(val);
+        const cls = !isNaN(num) && num < 0 ? 'evds-val-negative' : (!isNaN(num) && num > 0 ? 'evds-val-positive' : '');
+        const display = !isNaN(num) ? num.toLocaleString('tr-TR', { maximumFractionDigits: 4 }) : escapeHtml(String(val));
+        html += `<td class="${cls}">${display}</td>`;
+      }
+    });
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+});
+
+// ============ Twelve Data Panel ============
+
+let tdState = {
+  activeTab: 'search',
+  watchlist: JSON.parse(localStorage.getItem('td_watchlist') || '[]'),
+  currentSymbol: null,
+  searchDebounce: null
+};
+
+function openTdPanel() {
+  document.getElementById('td-panel-overlay').style.display = 'flex';
+  checkTdConnection();
+}
+
+function closeTdPanel() {
+  document.getElementById('td-panel-overlay').style.display = 'none';
+}
+
+document.getElementById('btn-td-tab').addEventListener('click', openTdPanel);
+document.getElementById('btn-td-close').addEventListener('click', closeTdPanel);
+document.getElementById('td-panel-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'td-panel-overlay') closeTdPanel();
+});
+
+async function checkTdConnection() {
+  const connected = await window.mailAPI.tdIsConnected();
+  document.getElementById('td-not-connected').style.display = connected ? 'none' : 'block';
+  document.getElementById('td-connected').style.display = connected ? 'flex' : 'none';
+  document.getElementById('td-quote-detail').style.display = 'none';
+  if (connected) {
+    switchTdTab('search');
+    loadTdUsage();
+  }
+}
+
+async function loadTdUsage() {
+  try {
+    const result = await window.mailAPI.tdGetUsage();
+    if (result.success && result.usage) {
+      const badge = document.getElementById('td-usage-badge');
+      const used = result.usage.current_usage || 0;
+      const limit = result.usage.plan_limit || 0;
+      badge.textContent = `${used}/${limit} kredi`;
+      badge.style.display = 'inline-block';
+    }
+  } catch (e) { /* ignore */ }
+}
+
+document.getElementById('btn-td-connect').addEventListener('click', async () => {
+  const apiKey = document.getElementById('td-api-key-input').value.trim();
+  if (!apiKey) return;
+  const btn = document.getElementById('btn-td-connect');
+  btn.disabled = true;
+  btn.innerHTML = '<div class="loading-spinner" style="width:16px;height:16px;"></div> Bağlanıyor...';
+  const result = await window.mailAPI.tdConnect(apiKey);
+  if (result.success) {
+    document.getElementById('td-api-key-input').value = '';
+    checkTdConnection();
+  } else {
+    alert('Bağlantı hatası: ' + result.error);
+  }
+  btn.disabled = false;
+  btn.innerHTML = '<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg> Bağlan';
+});
+
+document.getElementById('btn-td-disconnect-panel').addEventListener('click', async () => {
+  await window.mailAPI.tdDisconnect();
+  document.getElementById('td-usage-badge').style.display = 'none';
+  checkTdConnection();
+});
+
+// Tab switching
+document.querySelectorAll('.td-tab').forEach(tab => {
+  tab.addEventListener('click', () => {
+    switchTdTab(tab.dataset.tab);
+  });
+});
+
+function switchTdTab(tabName) {
+  tdState.activeTab = tabName;
+  document.querySelectorAll('.td-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+  document.querySelectorAll('.td-tab-content').forEach(c => c.classList.remove('active'));
+  const content = document.getElementById(`td-tab-${tabName}`);
+  if (content) content.classList.add('active');
+  document.getElementById('td-quote-detail').style.display = 'none';
+
+  if (tabName === 'forex') loadTdForex();
+  else if (tabName === 'crypto') loadTdCrypto();
+  else if (tabName === 'watchlist') renderTdWatchlist();
+}
+
+// Refresh button
+document.getElementById('btn-td-refresh').addEventListener('click', () => {
+  switchTdTab(tdState.activeTab);
+});
+
+// ---- Search ----
+document.getElementById('td-search-input').addEventListener('input', (e) => {
+  clearTimeout(tdState.searchDebounce);
+  const query = e.target.value.trim();
+  if (query.length < 2) return;
+  tdState.searchDebounce = setTimeout(() => tdSearchSymbols(query), 400);
+});
+
+document.getElementById('btn-td-search').addEventListener('click', () => {
+  const query = document.getElementById('td-search-input').value.trim();
+  if (query.length >= 1) tdSearchSymbols(query);
+});
+
+document.getElementById('td-search-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const query = e.target.value.trim();
+    if (query.length >= 1) tdSearchSymbols(query);
+  }
+});
+
+async function tdSearchSymbols(query) {
+  const container = document.getElementById('td-search-results');
+  container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Aranıyor...</p></div>';
+  const result = await window.mailAPI.tdSearchSymbol(query);
+  if (!result.success) {
+    container.innerHTML = `<div class="td-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+  if (!result.symbols || result.symbols.length === 0) {
+    container.innerHTML = '<div class="td-empty"><p>Sonuç bulunamadı.</p></div>';
+    return;
+  }
+  renderTdSymbolList(container, result.symbols);
+}
+
+function getSymbolIconClass(type) {
+  if (!type) return '';
+  const t = type.toLowerCase();
+  if (t.includes('stock') || t.includes('equity') || t.includes('common')) return 'stock';
+  if (t.includes('forex') || t.includes('currency')) return 'forex';
+  if (t.includes('crypto') || t.includes('digital')) return 'crypto';
+  return '';
+}
+
+function getSymbolIconLetter(symbol) {
+  if (!symbol) return '?';
+  return symbol.charAt(0).toUpperCase();
+}
+
+function renderTdSymbolList(container, symbols) {
+  container.innerHTML = symbols.map(s => {
+    const inWatchlist = tdState.watchlist.some(w => w.symbol === s.symbol);
+    const iconClass = getSymbolIconClass(s.type);
+    return `<div class="td-symbol-item" data-symbol="${escapeHtml(s.symbol)}">
+      <div class="td-symbol-icon ${iconClass}">${getSymbolIconLetter(s.symbol)}</div>
+      <div class="td-symbol-info">
+        <div class="td-symbol-name">${escapeHtml(s.name || s.symbol)}</div>
+        <div class="td-symbol-meta">
+          <span>${escapeHtml(s.type || '')}</span>
+          <span>${escapeHtml(s.exchange || '')}</span>
+          <span>${escapeHtml(s.country || '')}</span>
+        </div>
+      </div>
+      <div class="td-symbol-ticker">${escapeHtml(s.symbol)}</div>
+      <div class="td-symbol-actions">
+        <button class="td-btn-watchlist ${inWatchlist ? 'in-watchlist' : ''}" data-symbol="${escapeHtml(s.symbol)}" data-name="${escapeHtml(s.name || s.symbol)}" data-type="${escapeHtml(s.type || '')}" title="${inWatchlist ? 'Takipten Çıkar' : 'Takip Et'}">⭐</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Click to view quote
+  container.querySelectorAll('.td-symbol-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.td-symbol-actions')) return;
+      showTdQuote(item.dataset.symbol);
+    });
+  });
+
+  // Watchlist toggle
+  container.querySelectorAll('.td-btn-watchlist').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleTdWatchlist(btn.dataset.symbol, btn.dataset.name, btn.dataset.type);
+      btn.classList.toggle('in-watchlist');
+    });
+  });
+}
+
+// ---- Stocks ----
+document.getElementById('btn-td-load-stocks').addEventListener('click', async () => {
+  const exchange = document.getElementById('td-stocks-exchange').value;
+  const container = document.getElementById('td-stocks-list');
+  container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Hisseler yükleniyor...</p></div>';
+  const result = await window.mailAPI.tdGetStocks(exchange || undefined);
+  if (!result.success) {
+    container.innerHTML = `<div class="td-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+  if (!result.stocks || result.stocks.length === 0) {
+    container.innerHTML = '<div class="td-empty"><p>Hisse bulunamadı.</p></div>';
+    return;
+  }
+  renderTdSymbolList(container, result.stocks.map(s => ({
+    symbol: s.symbol, name: s.name, type: 'Stock',
+    exchange: s.exchange, country: s.country, currency: s.currency
+  })));
+});
+
+// ---- Forex ----
+async function loadTdForex() {
+  const container = document.getElementById('td-forex-list');
+  container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Pariteler yükleniyor...</p></div>';
+  const result = await window.mailAPI.tdGetForexPairs();
+  if (!result.success) {
+    container.innerHTML = `<div class="td-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+  if (!result.pairs || result.pairs.length === 0) {
+    container.innerHTML = '<div class="td-empty"><p>Forex pariteleri bulunamadı.</p></div>';
+    return;
+  }
+  renderTdSymbolList(container, result.pairs.map(p => ({
+    symbol: p.symbol, name: `${p.base} / ${p.quote}`, type: 'Forex',
+    exchange: p.group || '', country: ''
+  })));
+}
+
+// ---- Crypto ----
+async function loadTdCrypto() {
+  const container = document.getElementById('td-crypto-list');
+  container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Kripto paralar yükleniyor...</p></div>';
+  const result = await window.mailAPI.tdGetCrypto();
+  if (!result.success) {
+    container.innerHTML = `<div class="td-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+  if (!result.cryptos || result.cryptos.length === 0) {
+    container.innerHTML = '<div class="td-empty"><p>Kripto para bulunamadı.</p></div>';
+    return;
+  }
+  renderTdSymbolList(container, result.cryptos.map(c => ({
+    symbol: c.symbol, name: `${c.base} / ${c.quote}`, type: 'Crypto',
+    exchange: c.exchange || '', country: ''
+  })));
+}
+
+// ---- Watchlist ----
+function toggleTdWatchlist(symbol, name, type) {
+  const idx = tdState.watchlist.findIndex(w => w.symbol === symbol);
+  if (idx >= 0) {
+    tdState.watchlist.splice(idx, 1);
+  } else {
+    tdState.watchlist.push({ symbol, name, type });
+  }
+  localStorage.setItem('td_watchlist', JSON.stringify(tdState.watchlist));
+}
+
+async function renderTdWatchlist() {
+  const container = document.getElementById('td-watchlist-content');
+  if (tdState.watchlist.length === 0) {
+    container.innerHTML = '<div class="td-hint">Takip listesi boş. Sembol arayıp ⭐ ile ekleyin.</div>';
+    return;
+  }
+  container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Fiyatlar alınıyor...</p></div>';
+
+  // Batch price request for all watchlist symbols (minimum API usage!)
+  const symbols = tdState.watchlist.map(w => w.symbol);
+  const result = await window.mailAPI.tdGetPrice(symbols);
+  
+  let priceMap = {};
+  if (result.success && result.prices) {
+    // Single symbol returns {price: "..."}, multiple returns {SYMBOL: {price: "..."}}
+    if (symbols.length === 1) {
+      priceMap[symbols[0]] = result.prices.price || '-';
+    } else {
+      for (const sym of symbols) {
+        priceMap[sym] = result.prices[sym]?.price || '-';
+      }
+    }
+  }
+
+  container.innerHTML = tdState.watchlist.map(w => {
+    const price = priceMap[w.symbol] || '-';
+    const iconClass = getSymbolIconClass(w.type);
+    return `<div class="td-symbol-item" data-symbol="${escapeHtml(w.symbol)}">
+      <div class="td-symbol-icon ${iconClass}">${getSymbolIconLetter(w.symbol)}</div>
+      <div class="td-symbol-info">
+        <div class="td-symbol-name">${escapeHtml(w.name || w.symbol)}</div>
+        <div class="td-symbol-meta"><span>${escapeHtml(w.type || '')}</span></div>
+      </div>
+      <div class="td-symbol-ticker">${escapeHtml(w.symbol)}</div>
+      <div class="td-symbol-price">${price !== '-' ? parseFloat(price).toLocaleString('tr-TR', {maximumFractionDigits: 4}) : '-'}</div>
+      <div class="td-symbol-actions">
+        <button class="td-btn-remove-watchlist" data-symbol="${escapeHtml(w.symbol)}" title="Takipten Çıkar">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  // Click to view quote
+  container.querySelectorAll('.td-symbol-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.td-symbol-actions')) return;
+      showTdQuote(item.dataset.symbol);
+    });
+  });
+
+  // Remove from watchlist
+  container.querySelectorAll('.td-btn-remove-watchlist').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleTdWatchlist(btn.dataset.symbol, '', '');
+      renderTdWatchlist();
+    });
+  });
+}
+
+// ---- Quote Detail ----
+document.getElementById('btn-td-back-to-list').addEventListener('click', () => {
+  document.getElementById('td-quote-detail').style.display = 'none';
+  document.querySelectorAll('.td-tab-content').forEach(c => {
+    if (c.id === `td-tab-${tdState.activeTab}`) c.classList.add('active');
+  });
+});
+
+document.getElementById('btn-td-toggle-watchlist').addEventListener('click', () => {
+  if (!tdState.currentSymbol) return;
+  toggleTdWatchlist(tdState.currentSymbol, '', '');
+  const btn = document.getElementById('btn-td-toggle-watchlist');
+  const inWL = tdState.watchlist.some(w => w.symbol === tdState.currentSymbol);
+  btn.title = inWL ? 'Takipten Çıkar' : 'Takip Et';
+});
+
+async function showTdQuote(symbol) {
+  tdState.currentSymbol = symbol;
+  // Hide all tab contents, show quote detail
+  document.querySelectorAll('.td-tab-content').forEach(c => c.classList.remove('active'));
+  const detail = document.getElementById('td-quote-detail');
+  detail.style.display = 'flex';
+
+  document.getElementById('td-quote-title').textContent = symbol;
+  document.getElementById('td-quote-body').innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Yükleniyor...</p></div>';
+  document.getElementById('td-ts-table-wrap').innerHTML = '<p class="td-hint">Periyot ve adet seçip "Veri Getir" butonuna tıklayın.</p>';
+
+  // Update watchlist button
+  const inWL = tdState.watchlist.some(w => w.symbol === symbol);
+  document.getElementById('btn-td-toggle-watchlist').title = inWL ? 'Takipten Çıkar' : 'Takip Et';
+
+  const result = await window.mailAPI.tdGetQuote(symbol);
+  const body = document.getElementById('td-quote-body');
+
+  if (!result.success) {
+    body.innerHTML = `<div class="td-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+
+  const q = result.quote;
+  const price = parseFloat(q.close || q.price || 0);
+  const change = parseFloat(q.change || 0);
+  const changePct = parseFloat(q.percent_change || 0);
+  const changeClass = change >= 0 ? 'positive' : 'negative';
+  const changeSign = change >= 0 ? '+' : '';
+
+  const cards = [
+    { label: 'Fiyat', value: price.toLocaleString('tr-TR', {maximumFractionDigits: 4}), cls: 'big' },
+    { label: 'Değişim', value: `${changeSign}${change.toLocaleString('tr-TR', {maximumFractionDigits: 4})} (${changeSign}${changePct.toFixed(2)}%)`, cls: changeClass },
+    { label: 'Açılış', value: q.open ? parseFloat(q.open).toLocaleString('tr-TR', {maximumFractionDigits: 4}) : '-' },
+    { label: 'Yüksek', value: q.high ? parseFloat(q.high).toLocaleString('tr-TR', {maximumFractionDigits: 4}) : '-' },
+    { label: 'Düşük', value: q.low ? parseFloat(q.low).toLocaleString('tr-TR', {maximumFractionDigits: 4}) : '-' },
+    { label: 'Önceki Kapanış', value: q.previous_close ? parseFloat(q.previous_close).toLocaleString('tr-TR', {maximumFractionDigits: 4}) : '-' },
+    { label: 'Hacim', value: q.volume ? parseInt(q.volume).toLocaleString('tr-TR') : '-' },
+    { label: 'Ortalama Hacim', value: q.average_volume ? parseInt(q.average_volume).toLocaleString('tr-TR') : '-' },
+    { label: '52H Yüksek', value: q.fifty_two_week?.high ? parseFloat(q.fifty_two_week.high).toLocaleString('tr-TR', {maximumFractionDigits: 4}) : '-' },
+    { label: '52H Düşük', value: q.fifty_two_week?.low ? parseFloat(q.fifty_two_week.low).toLocaleString('tr-TR', {maximumFractionDigits: 4}) : '-' },
+    { label: 'Borsa', value: q.exchange || '-' },
+    { label: 'Para Birimi', value: q.currency || '-' }
+  ];
+
+  document.getElementById('td-quote-title').textContent = `${q.symbol || symbol} — ${q.name || ''}`;
+
+  body.innerHTML = cards.map(c => `
+    <div class="td-quote-card">
+      <div class="td-quote-card-label">${c.label}</div>
+      <div class="td-quote-card-value ${c.cls || ''}">${c.value}</div>
+    </div>
+  `).join('');
+
+  loadTdUsage();
+}
+
+// ---- Time Series Data ----
+document.getElementById('btn-td-fetch-ts').addEventListener('click', async () => {
+  if (!tdState.currentSymbol) return;
+
+  const interval = document.getElementById('td-ts-interval').value;
+  const outputsize = document.getElementById('td-ts-outputsize').value;
+  const indicator = document.getElementById('td-ts-indicator').value;
+  const wrap = document.getElementById('td-ts-table-wrap');
+
+  wrap.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Veri getiriliyor...</p></div>';
+
+  // Fetch time series
+  const tsResult = await window.mailAPI.tdGetTimeSeries(tdState.currentSymbol, interval, parseInt(outputsize));
+
+  if (!tsResult.success) {
+    wrap.innerHTML = `<div class="td-empty"><p>Hata: ${tsResult.error}</p></div>`;
+    return;
+  }
+
+  if (!tsResult.values || tsResult.values.length === 0) {
+    wrap.innerHTML = '<div class="td-empty"><p>Veri bulunamadı.</p></div>';
+    return;
+  }
+
+  // Optionally fetch indicator
+  let indicatorData = null;
+  let indicatorKeys = [];
+  if (indicator) {
+    const indResult = await window.mailAPI.tdGetIndicator(indicator, tdState.currentSymbol, interval, { outputsize: parseInt(outputsize) });
+    if (indResult.success && indResult.values) {
+      indicatorData = {};
+      indResult.values.forEach(v => { indicatorData[v.datetime] = v; });
+      if (indResult.values.length > 0) {
+        indicatorKeys = Object.keys(indResult.values[0]).filter(k => k !== 'datetime');
+      }
+    }
+  }
+
+  // Build table
+  const values = tsResult.values;
+  let html = `<div class="td-data-count">${values.length} kayıt${indicator ? ' + ' + indicator.toUpperCase() : ''}</div>`;
+  html += '<table class="td-ts-table"><thead><tr>';
+  html += '<th>Tarih</th><th>Açılış</th><th>Yüksek</th><th>Düşük</th><th>Kapanış</th><th>Hacim</th>';
+  indicatorKeys.forEach(k => { html += `<th>${escapeHtml(k.toUpperCase())}</th>`; });
+  html += '</tr></thead><tbody>';
+
+  values.forEach(v => {
+    const close = parseFloat(v.close || 0);
+    const open = parseFloat(v.open || 0);
+    const cls = close >= open ? 'td-val-positive' : 'td-val-negative';
+    html += '<tr>';
+    html += `<td>${escapeHtml(v.datetime || '')}</td>`;
+    html += `<td>${parseFloat(v.open || 0).toLocaleString('tr-TR', {maximumFractionDigits: 4})}</td>`;
+    html += `<td>${parseFloat(v.high || 0).toLocaleString('tr-TR', {maximumFractionDigits: 4})}</td>`;
+    html += `<td>${parseFloat(v.low || 0).toLocaleString('tr-TR', {maximumFractionDigits: 4})}</td>`;
+    html += `<td class="${cls}">${close.toLocaleString('tr-TR', {maximumFractionDigits: 4})}</td>`;
+    html += `<td>${v.volume ? parseInt(v.volume).toLocaleString('tr-TR') : '-'}</td>`;
+    if (indicatorData) {
+      const indRow = indicatorData[v.datetime];
+      indicatorKeys.forEach(k => {
+        const val = indRow ? indRow[k] : null;
+        if (val !== null && val !== undefined && val !== '') {
+          html += `<td>${parseFloat(val).toLocaleString('tr-TR', {maximumFractionDigits: 4})}</td>`;
+        } else {
+          html += '<td>-</td>';
+        }
+      });
+    }
+    html += '</tr>';
+  });
+
+  html += '</tbody></table>';
+  wrap.innerHTML = html;
+
+  loadTdUsage();
+});
+
+// ============ Yahoo Finance Panel ============
+
+const YF_CATEGORIES = [
+  { id: 'bist', label: '🇹🇷 BIST', symbols: [
+    { symbol: 'XU100.IS', name: 'BIST 100', type: 'INDEX' },
+    { symbol: 'THYAO.IS', name: 'Türk Hava Yolları', type: 'EQUITY' },
+    { symbol: 'GARAN.IS', name: 'Garanti BBVA', type: 'EQUITY' },
+    { symbol: 'ASELS.IS', name: 'Aselsan', type: 'EQUITY' },
+    { symbol: 'SISE.IS', name: 'Şişecam', type: 'EQUITY' },
+    { symbol: 'BIMAS.IS', name: 'BİM', type: 'EQUITY' },
+    { symbol: 'EREGL.IS', name: 'Ereğli Demir Çelik', type: 'EQUITY' },
+    { symbol: 'KCHOL.IS', name: 'Koç Holding', type: 'EQUITY' },
+    { symbol: 'SAHOL.IS', name: 'Sabancı Holding', type: 'EQUITY' },
+    { symbol: 'AKBNK.IS', name: 'Akbank', type: 'EQUITY' },
+    { symbol: 'TUPRS.IS', name: 'Tüpraş', type: 'EQUITY' },
+    { symbol: 'YKBNK.IS', name: 'Yapı Kredi', type: 'EQUITY' },
+    { symbol: 'PGSUS.IS', name: 'Pegasus', type: 'EQUITY' },
+    { symbol: 'TAVHL.IS', name: 'TAV Havalimanları', type: 'EQUITY' },
+    { symbol: 'FROTO.IS', name: 'Ford Otosan', type: 'EQUITY' },
+    { symbol: 'TOASO.IS', name: 'Tofaş', type: 'EQUITY' },
+    { symbol: 'SASA.IS', name: 'Sasa Polyester', type: 'EQUITY' },
+    { symbol: 'KOZAL.IS', name: 'Koza Altın', type: 'EQUITY' },
+    { symbol: 'PETKM.IS', name: 'Petkim', type: 'EQUITY' },
+    { symbol: 'HALKB.IS', name: 'Halkbank', type: 'EQUITY' }
+  ]},
+  { id: 'us', label: '🇺🇸 ABD Borsası', symbols: [
+    { symbol: 'AAPL', name: 'Apple', type: 'EQUITY' },
+    { symbol: 'MSFT', name: 'Microsoft', type: 'EQUITY' },
+    { symbol: 'GOOGL', name: 'Alphabet', type: 'EQUITY' },
+    { symbol: 'AMZN', name: 'Amazon', type: 'EQUITY' },
+    { symbol: 'TSLA', name: 'Tesla', type: 'EQUITY' },
+    { symbol: 'NVDA', name: 'NVIDIA', type: 'EQUITY' },
+    { symbol: 'META', name: 'Meta', type: 'EQUITY' }
+  ]},
+  { id: 'forex', label: '💱 Döviz', symbols: [
+    { symbol: 'USDTRY=X', name: 'Dolar / TL', type: 'CURRENCY' },
+    { symbol: 'EURTRY=X', name: 'Euro / TL', type: 'CURRENCY' },
+    { symbol: 'GBPTRY=X', name: 'Sterlin / TL', type: 'CURRENCY' },
+    { symbol: 'EURUSD=X', name: 'Euro / Dolar', type: 'CURRENCY' },
+    { symbol: 'GBPUSD=X', name: 'Sterlin / Dolar', type: 'CURRENCY' },
+    { symbol: 'GC=F', name: 'Altın (Vadeli)', type: 'FUTURE' }
+  ]},
+  { id: 'crypto', label: '₿ Kripto', symbols: [
+    { symbol: 'BTC-USD', name: 'Bitcoin', type: 'CRYPTOCURRENCY' },
+    { symbol: 'ETH-USD', name: 'Ethereum', type: 'CRYPTOCURRENCY' },
+    { symbol: 'SOL-USD', name: 'Solana', type: 'CRYPTOCURRENCY' },
+    { symbol: 'BNB-USD', name: 'Binance Coin', type: 'CRYPTOCURRENCY' },
+    { symbol: 'XRP-USD', name: 'Ripple', type: 'CRYPTOCURRENCY' },
+    { symbol: 'ADA-USD', name: 'Cardano', type: 'CRYPTOCURRENCY' }
+  ]},
+  { id: 'index', label: '📊 Endeksler', symbols: [
+    { symbol: '^GSPC', name: 'S&P 500', type: 'INDEX' },
+    { symbol: '^DJI', name: 'Dow Jones', type: 'INDEX' },
+    { symbol: '^IXIC', name: 'Nasdaq', type: 'INDEX' },
+    { symbol: '^FTSE', name: 'FTSE 100', type: 'INDEX' },
+    { symbol: '^GDAXI', name: 'DAX', type: 'INDEX' }
+  ]}
+];
+
+let yfState = {
+  activeTab: 'yf-popular',
+  watchlist: JSON.parse(localStorage.getItem('yf_watchlist') || '[]'),
+  currentSymbol: null,
+  searchDebounce: null,
+  connected: false,
+  chartData: null,
+  chartView: 'chart'
+};
+
+function openYfPanel() {
+  document.getElementById('yf-panel-overlay').style.display = 'flex';
+  checkYfConnection();
+}
+
+function closeYfPanel() {
+  document.getElementById('yf-panel-overlay').style.display = 'none';
+}
+
+document.getElementById('btn-yf-tab').addEventListener('click', openYfPanel);
+document.getElementById('btn-yf-close').addEventListener('click', closeYfPanel);
+document.getElementById('yf-panel-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'yf-panel-overlay') closeYfPanel();
+});
+
+async function checkYfConnection() {
+  const result = await window.mailAPI.yfTestConnection();
+  yfState.connected = result.success;
+  document.getElementById('yf-not-connected').style.display = result.success ? 'none' : 'block';
+  document.getElementById('yf-connected').style.display = result.success ? 'flex' : 'none';
+  document.getElementById('yf-quote-detail').style.display = 'none';
+  if (result.success) {
+    switchYfTab('yf-popular');
+  }
+}
+
+document.getElementById('btn-yf-retry').addEventListener('click', () => {
+  checkYfConnection();
+});
+
+// Tab switching
+document.querySelectorAll('.yf-tab').forEach(tab => {
+  tab.addEventListener('click', () => switchYfTab(tab.dataset.tab));
+});
+
+function switchYfTab(tabName) {
+  yfState.activeTab = tabName;
+  document.querySelectorAll('.yf-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+  document.querySelectorAll('.yf-tab-content').forEach(c => c.classList.remove('active'));
+  const content = document.getElementById(`yf-tc-${tabName}`);
+  if (content) content.classList.add('active');
+  document.getElementById('yf-quote-detail').style.display = 'none';
+
+  if (tabName === 'yf-watchlist') renderYfWatchlist();
+  else if (tabName === 'yf-popular') loadYfPopular();
+}
+
+// ---- Search ----
+document.getElementById('yf-search-input').addEventListener('input', (e) => {
+  clearTimeout(yfState.searchDebounce);
+  const query = e.target.value.trim();
+  if (query.length < 2) return;
+  yfState.searchDebounce = setTimeout(() => yfSearchSymbols(query), 400);
+});
+
+document.getElementById('btn-yf-search').addEventListener('click', () => {
+  const query = document.getElementById('yf-search-input').value.trim();
+  if (query.length >= 1) yfSearchSymbols(query);
+});
+
+document.getElementById('yf-search-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const query = e.target.value.trim();
+    if (query.length >= 1) yfSearchSymbols(query);
+  }
+});
+
+async function yfSearchSymbols(query) {
+  const container = document.getElementById('yf-search-results');
+  container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Aranıyor...</p></div>';
+  const result = await window.mailAPI.yfSearch(query);
+  if (!result.success) {
+    container.innerHTML = `<div class="yf-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+  if (!result.quotes || result.quotes.length === 0) {
+    container.innerHTML = '<div class="yf-empty"><p>Sonuç bulunamadı.</p></div>';
+    return;
+  }
+  renderYfSymbolList(container, result.quotes.map(q => ({
+    symbol: q.symbol, name: q.name, type: q.type, exchange: q.exchange
+  })));
+}
+
+function getYfIconClass(type) {
+  if (!type) return '';
+  const t = type.toUpperCase();
+  if (t.includes('EQUITY') || t.includes('STOCK')) return 'equity';
+  if (t.includes('CURRENCY') || t.includes('FOREX')) return 'forex';
+  if (t.includes('CRYPTO')) return 'crypto';
+  if (t.includes('ETF')) return 'etf';
+  if (t.includes('INDEX') || t.includes('FUTURE')) return 'index';
+  return '';
+}
+
+function renderYfSymbolList(container, symbols, withPrices) {
+  container.innerHTML = symbols.map(s => {
+    const inWL = yfState.watchlist.some(w => w.symbol === s.symbol);
+    const iconClass = getYfIconClass(s.type);
+    let priceHtml = '';
+    if (withPrices && s.price != null) {
+      const cls = (s.change || 0) >= 0 ? 'yf-change-positive' : 'yf-change-negative';
+      const sign = (s.change || 0) >= 0 ? '+' : '';
+      priceHtml = `<div class="yf-symbol-price">${parseFloat(s.price).toLocaleString('tr-TR', {maximumFractionDigits: 4})}</div>
+        <div class="yf-symbol-change ${cls}">${sign}${(s.changePercent || 0).toFixed(2)}%</div>`;
+    }
+    return `<div class="yf-symbol-item" data-symbol="${escapeHtml(s.symbol)}">
+      <div class="yf-symbol-icon ${iconClass}">${(s.symbol || '?').charAt(0).toUpperCase()}</div>
+      <div class="yf-symbol-info">
+        <div class="yf-symbol-name">${escapeHtml(s.name || s.symbol)}</div>
+        <div class="yf-symbol-meta">
+          <span>${escapeHtml(s.type || '')}</span>
+          <span>${escapeHtml(s.exchange || '')}</span>
+        </div>
+      </div>
+      <div class="yf-symbol-ticker">${escapeHtml(s.symbol)}</div>
+      ${priceHtml}
+      <div class="yf-symbol-actions">
+        <button class="yf-btn-wl ${inWL ? 'in-wl' : ''}" data-symbol="${escapeHtml(s.symbol)}" data-name="${escapeHtml(s.name || s.symbol)}" data-type="${escapeHtml(s.type || '')}" title="${inWL ? 'Takipten Çıkar' : 'Takip Et'}">⭐</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  container.querySelectorAll('.yf-symbol-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.yf-symbol-actions')) return;
+      showYfQuote(item.dataset.symbol);
+    });
+  });
+
+  container.querySelectorAll('.yf-btn-wl').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleYfWatchlist(btn.dataset.symbol, btn.dataset.name, btn.dataset.type);
+      btn.classList.toggle('in-wl');
+    });
+  });
+}
+
+// ---- Watchlist ----
+function toggleYfWatchlist(symbol, name, type) {
+  const idx = yfState.watchlist.findIndex(w => w.symbol === symbol);
+  if (idx >= 0) {
+    yfState.watchlist.splice(idx, 1);
+  } else {
+    yfState.watchlist.push({ symbol, name, type });
+  }
+  localStorage.setItem('yf_watchlist', JSON.stringify(yfState.watchlist));
+}
+
+async function renderYfWatchlist() {
+  const container = document.getElementById('yf-watchlist-content');
+  if (yfState.watchlist.length === 0) {
+    container.innerHTML = '<div class="yf-hint">Takip listesi boş. Sembol arayıp ⭐ ile ekleyin.</div>';
+    return;
+  }
+  container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Fiyatlar alınıyor...</p></div>';
+
+  const symbols = yfState.watchlist.map(w => w.symbol);
+  const result = await window.mailAPI.yfGetQuote(symbols);
+
+  if (!result.success) {
+    container.innerHTML = `<div class="yf-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+
+  const quoteMap = {};
+  (result.quotes || []).forEach(q => { quoteMap[q.symbol] = q; });
+
+  const symbolsWithPrices = yfState.watchlist.map(w => {
+    const q = quoteMap[w.symbol] || {};
+    return {
+      symbol: w.symbol, name: q.name || w.name, type: q.type || w.type,
+      exchange: q.exchange || '', price: q.price, change: q.change,
+      changePercent: q.changePercent
+    };
+  });
+
+  renderYfSymbolList(container, symbolsWithPrices, true);
+
+  // Add remove buttons
+  container.querySelectorAll('.yf-btn-wl').forEach(btn => {
+    btn.classList.add('in-wl');
+  });
+}
+
+// ---- Popular ----
+async function loadYfPopular() {
+  const container = document.getElementById('yf-popular-grid');
+  container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Fiyatlar alınıyor...</p></div>';
+
+  const allSymbols = YF_CATEGORIES.flatMap(c => c.symbols.map(s => s.symbol));
+  const result = await window.mailAPI.yfGetQuote(allSymbols);
+
+  if (!result.success) {
+    container.innerHTML = `<div class="yf-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+
+  const quoteMap = {};
+  (result.quotes || []).forEach(q => { quoteMap[q.symbol] = q; });
+
+  container.innerHTML = YF_CATEGORIES.map(cat => {
+    const itemsHtml = cat.symbols.map(s => {
+      const q = quoteMap[s.symbol] || {};
+      const inWL = yfState.watchlist.some(w => w.symbol === s.symbol);
+      const iconClass = getYfIconClass(s.type);
+      let priceHtml = '';
+      if (q.price != null) {
+        const cls = (q.change || 0) >= 0 ? 'yf-change-positive' : 'yf-change-negative';
+        const sign = (q.change || 0) >= 0 ? '+' : '';
+        priceHtml = `<div class="yf-symbol-price">${parseFloat(q.price).toLocaleString('tr-TR', {maximumFractionDigits: 4})}</div>
+          <div class="yf-symbol-change ${cls}">${sign}${(q.changePercent || 0).toFixed(2)}%</div>`;
+      }
+      return `<div class="yf-symbol-item" data-symbol="${escapeHtml(s.symbol)}">
+        <div class="yf-symbol-icon ${iconClass}">${(s.symbol || '?').charAt(0).toUpperCase()}</div>
+        <div class="yf-symbol-info">
+          <div class="yf-symbol-name">${escapeHtml(q.name || s.name)}</div>
+          <div class="yf-symbol-meta"><span>${escapeHtml(s.type || '')}</span><span>${escapeHtml(q.exchange || '')}</span></div>
+        </div>
+        <div class="yf-symbol-ticker">${escapeHtml(s.symbol)}</div>
+        ${priceHtml}
+        <div class="yf-symbol-actions">
+          <button class="yf-btn-wl ${inWL ? 'in-wl' : ''}" data-symbol="${escapeHtml(s.symbol)}" data-name="${escapeHtml(q.name || s.name)}" data-type="${escapeHtml(s.type || '')}" title="${inWL ? 'Takipten Çıkar' : 'Takip Et'}">⭐</button>
+        </div>
+      </div>`;
+    }).join('');
+
+    return `<div class="yf-category-section" data-cat="${cat.id}">
+      <div class="yf-category-header">
+        <span class="yf-category-title">${cat.label}</span>
+        <span class="yf-category-arrow">▼</span>
+      </div>
+      <div class="yf-category-items">${itemsHtml}</div>
+    </div>`;
+  }).join('');
+
+  // Bind click events
+  container.querySelectorAll('.yf-symbol-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.yf-symbol-actions')) return;
+      showYfQuote(item.dataset.symbol);
+    });
+  });
+
+  container.querySelectorAll('.yf-btn-wl').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleYfWatchlist(btn.dataset.symbol, btn.dataset.name, btn.dataset.type);
+      btn.classList.toggle('in-wl');
+    });
+  });
+
+  // Category collapse toggle
+  container.querySelectorAll('.yf-category-header').forEach(header => {
+    header.addEventListener('click', () => {
+      header.closest('.yf-category-section').classList.toggle('collapsed');
+    });
+  });
+}
+
+// ---- Quote Detail ----
+document.getElementById('btn-yf-back').addEventListener('click', () => {
+  document.getElementById('yf-quote-detail').style.display = 'none';
+  document.querySelectorAll('.yf-tab-content').forEach(c => {
+    if (c.id === `yf-tc-${yfState.activeTab}`) c.classList.add('active');
+  });
+});
+
+document.getElementById('btn-yf-toggle-wl').addEventListener('click', () => {
+  if (!yfState.currentSymbol) return;
+  toggleYfWatchlist(yfState.currentSymbol, '', '');
+});
+
+async function showYfQuote(symbol) {
+  yfState.currentSymbol = symbol;
+  document.querySelectorAll('.yf-tab-content').forEach(c => c.classList.remove('active'));
+  const detail = document.getElementById('yf-quote-detail');
+  detail.style.display = 'flex';
+
+  document.getElementById('yf-quote-title').textContent = symbol;
+  document.getElementById('yf-quote-body').innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Yükleniyor...</p></div>';
+  document.getElementById('yf-chart-table-wrap').innerHTML = '<p class="yf-hint">Periyot ve aralık seçip "Veri Getir" butonuna tıklayın.</p>';
+  document.getElementById('yf-chart-canvas-wrap').style.display = 'none';
+  yfState.chartData = null;
+
+  const result = await window.mailAPI.yfGetQuote(symbol);
+  const body = document.getElementById('yf-quote-body');
+
+  if (!result.success) {
+    body.innerHTML = `<div class="yf-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+
+  const q = (result.quotes || [])[0];
+  if (!q) {
+    body.innerHTML = '<div class="yf-empty"><p>Veri bulunamadı.</p></div>';
+    return;
+  }
+
+  const price = q.price || 0;
+  const change = q.change || 0;
+  const changePct = q.changePercent || 0;
+  const changeClass = change >= 0 ? 'positive' : 'negative';
+  const changeSign = change >= 0 ? '+' : '';
+
+  const fmtNum = (v) => v != null ? parseFloat(v).toLocaleString('tr-TR', {maximumFractionDigits: 4}) : '-';
+  const fmtBig = (v) => v != null ? parseFloat(v).toLocaleString('tr-TR', {maximumFractionDigits: 0}) : '-';
+
+  const cards = [
+    { label: 'Fiyat', value: fmtNum(price), cls: 'big' },
+    { label: 'Değişim', value: `${changeSign}${fmtNum(change)} (${changeSign}${changePct.toFixed(2)}%)`, cls: changeClass },
+    { label: 'Açılış', value: fmtNum(q.open) },
+    { label: 'Yüksek', value: fmtNum(q.high) },
+    { label: 'Düşük', value: fmtNum(q.low) },
+    { label: 'Önceki Kapanış', value: fmtNum(q.prevClose) },
+    { label: 'Hacim', value: q.volume ? fmtBig(q.volume) : '-' },
+    { label: 'Ort. Hacim (3A)', value: q.avgVolume ? fmtBig(q.avgVolume) : '-' },
+    { label: '52H Yüksek', value: fmtNum(q.fiftyTwoWeekHigh) },
+    { label: '52H Düşük', value: fmtNum(q.fiftyTwoWeekLow) },
+    { label: 'Piyasa Değeri', value: q.marketCap ? fmtBig(q.marketCap) : '-' },
+    { label: 'F/K Oranı', value: q.trailingPE ? fmtNum(q.trailingPE) : '-' },
+    { label: 'EPS', value: q.epsTrailingTwelveMonths ? fmtNum(q.epsTrailingTwelveMonths) : '-' },
+    { label: 'Borsa', value: q.exchange || '-' },
+    { label: 'Para Birimi', value: q.currency || '-' },
+    { label: 'Piyasa Durumu', value: q.marketState || '-' }
+  ];
+
+  document.getElementById('yf-quote-title').textContent = `${q.symbol || symbol} — ${q.name || ''}`;
+
+  body.innerHTML = cards.map(c => `
+    <div class="yf-quote-card">
+      <div class="yf-quote-card-label">${c.label}</div>
+      <div class="yf-quote-card-value ${c.cls || ''}">${c.value}</div>
+    </div>
+  `).join('');
+}
+
+// ---- Chart Data ----
+document.getElementById('btn-yf-view-chart').addEventListener('click', () => {
+  yfState.chartView = 'chart';
+  document.getElementById('btn-yf-view-chart').classList.add('active');
+  document.getElementById('btn-yf-view-table').classList.remove('active');
+  if (yfState.chartData) {
+    document.getElementById('yf-chart-canvas-wrap').style.display = 'block';
+    document.getElementById('yf-chart-table-wrap').style.display = 'none';
+  }
+});
+
+document.getElementById('btn-yf-view-table').addEventListener('click', () => {
+  yfState.chartView = 'table';
+  document.getElementById('btn-yf-view-table').classList.add('active');
+  document.getElementById('btn-yf-view-chart').classList.remove('active');
+  if (yfState.chartData) {
+    document.getElementById('yf-chart-canvas-wrap').style.display = 'none';
+    document.getElementById('yf-chart-table-wrap').style.display = 'block';
+  }
+});
+
+function drawYfChart(values) {
+  const canvas = document.getElementById('yf-chart-canvas');
+  const wrap = document.getElementById('yf-chart-canvas-wrap');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = wrap.clientWidth - 32;
+  const h = 300;
+
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.scale(dpr, dpr);
+
+  const pad = { top: 24, right: 65, bottom: 44, left: 12 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+
+  const closes = values.map(v => v.close).filter(v => v != null);
+  if (closes.length < 2) return;
+  const minVal = Math.min(...closes);
+  const maxVal = Math.max(...closes);
+  const range = maxVal - minVal || 1;
+
+  // Determine chart color based on trend
+  const first = closes[0];
+  const last = closes[closes.length - 1];
+  const isUp = last >= first;
+  const lineColor = isUp ? '#27ae60' : '#e74c3c';
+
+  ctx.clearRect(0, 0, w, h);
+
+  // Grid lines + Y labels
+  ctx.textAlign = 'left';
+  ctx.font = '10px system-ui, sans-serif';
+  for (let i = 0; i <= 5; i++) {
+    const y = pad.top + (ch / 5) * i;
+    ctx.strokeStyle = 'rgba(128,128,128,0.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(w - pad.right, y);
+    ctx.stroke();
+
+    const val = maxVal - (range / 5) * i;
+    ctx.fillStyle = 'rgba(128,128,128,0.6)';
+    ctx.fillText(val.toLocaleString('tr-TR', { maximumFractionDigits: 2 }), w - pad.right + 6, y + 4);
+  }
+
+  // X labels
+  const labelCount = Math.min(7, values.length);
+  const step = Math.max(1, Math.floor((values.length - 1) / (labelCount - 1)));
+  ctx.textAlign = 'center';
+  for (let i = 0; i < values.length; i += step) {
+    const x = pad.left + (i / (values.length - 1)) * cw;
+    const dt = values[i].datetime || '';
+    const short = dt.length > 10 ? dt.substring(5, 10) : dt.substring(0, 10);
+    ctx.fillStyle = 'rgba(128,128,128,0.6)';
+    ctx.fillText(short, x, h - pad.bottom + 16);
+  }
+
+  // Build points
+  const points = values.map((v, i) => ({
+    x: pad.left + (i / (values.length - 1)) * cw,
+    y: pad.top + (1 - ((v.close || minVal) - minVal) / range) * ch
+  }));
+
+  // Gradient fill under line
+  const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + ch);
+  gradient.addColorStop(0, lineColor + '50');
+  gradient.addColorStop(0.6, lineColor + '18');
+  gradient.addColorStop(1, lineColor + '00');
+
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const cpx = (prev.x + curr.x) / 2;
+    ctx.bezierCurveTo(cpx, prev.y, cpx, curr.y, curr.x, curr.y);
+  }
+  ctx.lineTo(points[points.length - 1].x, pad.top + ch);
+  ctx.lineTo(points[0].x, pad.top + ch);
+  ctx.closePath();
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  // Smooth line
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1];
+    const curr = points[i];
+    const cpx = (prev.x + curr.x) / 2;
+    ctx.bezierCurveTo(cpx, prev.y, cpx, curr.y, curr.x, curr.y);
+  }
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+
+  // End dot
+  const lp = points[points.length - 1];
+  ctx.beginPath();
+  ctx.arc(lp.x, lp.y, 5, 0, Math.PI * 2);
+  ctx.fillStyle = lineColor;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+
+  // Price label on last point
+  ctx.fillStyle = lineColor;
+  ctx.font = 'bold 11px system-ui, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(last.toLocaleString('tr-TR', { maximumFractionDigits: 2 }), lp.x + 10, lp.y + 4);
+
+  // Hover interaction
+  const tooltip = document.getElementById('yf-chart-tooltip');
+  canvas.onmousemove = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / dpr / rect.width);
+    if (mx < pad.left || mx > w - pad.right) { tooltip.style.display = 'none'; return; }
+    const ratio = (mx - pad.left) / cw;
+    const idx = Math.round(ratio * (values.length - 1));
+    if (idx < 0 || idx >= values.length) { tooltip.style.display = 'none'; return; }
+    const v = values[idx];
+    const pt = points[idx];
+
+    // Redraw + crosshair
+    ctx.clearRect(0, 0, w * dpr, h * dpr);
+    ctx.save();
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    // Redraw grid
+    for (let i = 0; i <= 5; i++) {
+      const y = pad.top + (ch / 5) * i;
+      ctx.strokeStyle = 'rgba(128,128,128,0.12)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(pad.left, y);
+      ctx.lineTo(w - pad.right, y);
+      ctx.stroke();
+      const val = maxVal - (range / 5) * i;
+      ctx.fillStyle = 'rgba(128,128,128,0.6)';
+      ctx.font = '10px system-ui, sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(val.toLocaleString('tr-TR', { maximumFractionDigits: 2 }), w - pad.right + 6, y + 4);
+    }
+    ctx.textAlign = 'center';
+    for (let i = 0; i < values.length; i += step) {
+      const x = pad.left + (i / (values.length - 1)) * cw;
+      const dt = values[i].datetime || '';
+      const short = dt.length > 10 ? dt.substring(5, 10) : dt.substring(0, 10);
+      ctx.fillStyle = 'rgba(128,128,128,0.6)';
+      ctx.fillText(short, x, h - pad.bottom + 16);
+    }
+    // Fill
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let j = 1; j < points.length; j++) {
+      const pv = points[j - 1]; const cr = points[j];
+      ctx.bezierCurveTo((pv.x+cr.x)/2, pv.y, (pv.x+cr.x)/2, cr.y, cr.x, cr.y);
+    }
+    ctx.lineTo(points[points.length - 1].x, pad.top + ch);
+    ctx.lineTo(points[0].x, pad.top + ch);
+    ctx.closePath();
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    // Line
+    ctx.beginPath();
+    ctx.moveTo(points[0].x, points[0].y);
+    for (let j = 1; j < points.length; j++) {
+      const pv = points[j - 1]; const cr = points[j];
+      ctx.bezierCurveTo((pv.x+cr.x)/2, pv.y, (pv.x+cr.x)/2, cr.y, cr.x, cr.y);
+    }
+    ctx.strokeStyle = lineColor;
+    ctx.lineWidth = 2.5;
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    // Crosshair
+    ctx.setLineDash([4, 4]);
+    ctx.strokeStyle = 'rgba(128,128,128,0.4)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pt.x, pad.top);
+    ctx.lineTo(pt.x, pad.top + ch);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(pad.left, pt.y);
+    ctx.lineTo(w - pad.right, pt.y);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    // Hover dot
+    ctx.beginPath();
+    ctx.arc(pt.x, pt.y, 6, 0, Math.PI * 2);
+    ctx.fillStyle = lineColor;
+    ctx.fill();
+    ctx.strokeStyle = '#fff';
+    ctx.lineWidth = 2.5;
+    ctx.stroke();
+    ctx.restore();
+
+    const fmtN = (n) => n != null ? parseFloat(n).toLocaleString('tr-TR', {maximumFractionDigits: 4}) : '-';
+    tooltip.innerHTML = `<strong>${v.datetime || ''}</strong><br>A: ${fmtN(v.open)} Y: ${fmtN(v.high)} D: ${fmtN(v.low)}<br><strong>K: ${fmtN(v.close)}</strong> H: ${v.volume ? parseInt(v.volume).toLocaleString('tr-TR') : '-'}`;
+    tooltip.style.display = 'block';
+    tooltip.style.left = Math.min(e.clientX - wrap.getBoundingClientRect().left + 12, w - 180) + 'px';
+    tooltip.style.top = (e.clientY - wrap.getBoundingClientRect().top - 60) + 'px';
+  };
+  canvas.onmouseleave = () => {
+    tooltip.style.display = 'none';
+    // Redraw clean
+    drawYfChart(values);
+  };
+}
+
+function renderYfTable(values, currency) {
+  let html = `<div class="yf-data-count">${values.length} kayıt — ${currency || ''}</div>`;
+  html += '<table class="yf-chart-table"><thead><tr>';
+  html += '<th>Tarih</th><th>Açılış</th><th>Yüksek</th><th>Düşük</th><th>Kapanış</th><th>Düz. Kapanış</th><th>Hacim</th>';
+  html += '</tr></thead><tbody>';
+  values.forEach(v => {
+    const close = v.close || 0;
+    const open = v.open || 0;
+    const cls = close >= open ? 'yf-val-positive' : 'yf-val-negative';
+    const fmtN = (n) => n != null ? parseFloat(n).toLocaleString('tr-TR', {maximumFractionDigits: 4}) : '-';
+    html += '<tr>';
+    html += `<td>${escapeHtml(v.datetime || '')}</td>`;
+    html += `<td>${fmtN(v.open)}</td>`;
+    html += `<td>${fmtN(v.high)}</td>`;
+    html += `<td>${fmtN(v.low)}</td>`;
+    html += `<td class="${cls}">${fmtN(v.close)}</td>`;
+    html += `<td>${fmtN(v.adjClose)}</td>`;
+    html += `<td>${v.volume ? parseInt(v.volume).toLocaleString('tr-TR') : '-'}</td>`;
+    html += '</tr>';
+  });
+  html += '</tbody></table>';
+  return html;
+}
+
+document.getElementById('btn-yf-fetch-chart').addEventListener('click', async () => {
+  if (!yfState.currentSymbol) return;
+
+  const interval = document.getElementById('yf-chart-interval').value;
+  const range = document.getElementById('yf-chart-range').value;
+  const canvasWrap = document.getElementById('yf-chart-canvas-wrap');
+  const tableWrap = document.getElementById('yf-chart-table-wrap');
+
+  canvasWrap.style.display = 'none';
+  tableWrap.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Veri getiriliyor...</p></div>';
+  tableWrap.style.display = 'block';
+
+  const result = await window.mailAPI.yfGetChart(yfState.currentSymbol, interval, range);
+
+  if (!result.success) {
+    tableWrap.innerHTML = `<div class="yf-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+
+  if (!result.values || result.values.length === 0) {
+    tableWrap.innerHTML = '<div class="yf-empty"><p>Veri bulunamadı.</p></div>';
+    return;
+  }
+
+  const values = result.values;
+  yfState.chartData = { values, currency: result.meta?.currency || '' };
+
+  // Render table
+  tableWrap.innerHTML = renderYfTable(values, yfState.chartData.currency);
+
+  // Render chart on canvas
+  canvasWrap.style.display = 'block';
+  drawYfChart(values);
+
+  // Show based on selected view
+  if (yfState.chartView === 'chart') {
+    canvasWrap.style.display = 'block';
+    tableWrap.style.display = 'none';
+  } else {
+    canvasWrap.style.display = 'none';
+    tableWrap.style.display = 'block';
+  }
+});
+
+// ============ Binance Panel ============
+
+let bnState = {
+  activeTab: 'bn-top',
+  watchlist: JSON.parse(localStorage.getItem('bn_watchlist') || '[]'),
+  currentSymbol: null,
+  searchDebounce: null,
+  connected: false,
+  chartData: null,
+  chartView: 'chart'
+};
+
+function openBnPanel() {
+  document.getElementById('bn-panel-overlay').style.display = 'flex';
+  checkBnConnection();
+}
+
+function closeBnPanel() {
+  document.getElementById('bn-panel-overlay').style.display = 'none';
+}
+
+document.getElementById('btn-bn-tab').addEventListener('click', openBnPanel);
+document.getElementById('btn-bn-close').addEventListener('click', closeBnPanel);
+document.getElementById('bn-panel-overlay').addEventListener('click', (e) => {
+  if (e.target.id === 'bn-panel-overlay') closeBnPanel();
+});
+
+async function checkBnConnection() {
+  const result = await window.mailAPI.bnTestConnection();
+  bnState.connected = result.success;
+  document.getElementById('bn-not-connected').style.display = result.success ? 'none' : 'block';
+  document.getElementById('bn-connected').style.display = result.success ? 'flex' : 'none';
+  document.getElementById('bn-pair-detail').style.display = 'none';
+  if (result.success) switchBnTab('bn-top');
+}
+
+document.getElementById('btn-bn-retry').addEventListener('click', checkBnConnection);
+
+document.querySelectorAll('.bn-tab').forEach(tab => {
+  tab.addEventListener('click', () => switchBnTab(tab.dataset.tab));
+});
+
+function switchBnTab(tabName) {
+  bnState.activeTab = tabName;
+  document.querySelectorAll('.bn-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tabName));
+  document.querySelectorAll('.bn-tab-content').forEach(c => c.classList.remove('active'));
+  const content = document.getElementById(`bn-tc-${tabName}`);
+  if (content) content.classList.add('active');
+  document.getElementById('bn-pair-detail').style.display = 'none';
+  if (tabName === 'bn-top') loadBnTop();
+  else if (tabName === 'bn-watchlist') renderBnWatchlist();
+}
+
+// ---- Top Pairs ----
+async function loadBnTop() {
+  const container = document.getElementById('bn-top-content');
+  container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Yükleniyor...</p></div>';
+  const result = await window.mailAPI.bnGetTopPairs();
+  if (!result.success) {
+    container.innerHTML = `<div class="bn-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+  renderBnPairList(container, result.pairs);
+}
+
+function renderBnPairList(container, pairs) {
+  container.innerHTML = pairs.map(p => {
+    const inWL = bnState.watchlist.includes(p.symbol);
+    const change = parseFloat(p.change || 0);
+    const cls = change >= 0 ? 'bn-change-positive' : 'bn-change-negative';
+    const sign = change >= 0 ? '+' : '';
+    const price = parseFloat(p.price);
+    return `<div class="bn-pair-item" data-symbol="${escapeHtml(p.symbol)}">
+      <div class="bn-pair-icon">${p.symbol.replace(/USDT$|BTC$|BUSD$|TRY$/,'').substring(0,2)}</div>
+      <div class="bn-pair-info">
+        <div class="bn-pair-name">${escapeHtml(p.symbol)}</div>
+        <div class="bn-pair-meta">${p.volume ? 'Vol: $' + parseFloat(p.volume).toLocaleString('en-US',{maximumFractionDigits:0}) : ''}</div>
+      </div>
+      <div>
+        <div class="bn-pair-price">${price.toLocaleString('tr-TR', {maximumFractionDigits: price < 1 ? 6 : 2})}</div>
+        <div class="bn-pair-change ${cls}">${sign}${change.toFixed(2)}%</div>
+      </div>
+      <div class="bn-pair-actions">
+        <button class="bn-btn-wl ${inWL ? 'in-wl' : ''}" data-symbol="${escapeHtml(p.symbol)}" title="${inWL ? 'Takipten Çıkar' : 'Takip Et'}">⭐</button>
+      </div>
+    </div>`;
+  }).join('');
+
+  container.querySelectorAll('.bn-pair-item').forEach(item => {
+    item.addEventListener('click', (e) => {
+      if (e.target.closest('.bn-pair-actions')) return;
+      showBnPair(item.dataset.symbol);
+    });
+  });
+
+  container.querySelectorAll('.bn-btn-wl').forEach(btn => {
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleBnWatchlist(btn.dataset.symbol);
+      btn.classList.toggle('in-wl');
+    });
+  });
+}
+
+// ---- Search ----
+document.getElementById('bn-search-input').addEventListener('input', (e) => {
+  clearTimeout(bnState.searchDebounce);
+  const query = e.target.value.trim();
+  if (query.length < 2) return;
+  bnState.searchDebounce = setTimeout(() => bnSearchSymbols(query), 400);
+});
+
+document.getElementById('btn-bn-search').addEventListener('click', () => {
+  const q = document.getElementById('bn-search-input').value.trim();
+  if (q.length >= 1) bnSearchSymbols(q);
+});
+
+document.getElementById('bn-search-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') {
+    const q = e.target.value.trim();
+    if (q.length >= 1) bnSearchSymbols(q);
+  }
+});
+
+async function bnSearchSymbols(query) {
+  const container = document.getElementById('bn-search-results');
+  container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Aranıyor...</p></div>';
+  const result = await window.mailAPI.bnSearch(query);
+  if (!result.success) {
+    container.innerHTML = `<div class="bn-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+  if (!result.symbols || result.symbols.length === 0) {
+    container.innerHTML = '<div class="bn-empty"><p>Sonuç bulunamadı.</p></div>';
+    return;
+  }
+  // Get prices for results
+  const priceResult = await window.mailAPI.bnGetPrices(result.symbols.map(s => s.symbol));
+  const priceMap = {};
+  if (priceResult.success) priceResult.prices.forEach(p => { priceMap[p.symbol] = p.price; });
+
+  const pairs = result.symbols.map(s => ({
+    symbol: s.symbol, price: priceMap[s.symbol] || '0', change: null,
+    volume: null
+  }));
+  renderBnPairList(container, pairs);
+}
+
+// ---- Watchlist ----
+function toggleBnWatchlist(symbol) {
+  const idx = bnState.watchlist.indexOf(symbol);
+  if (idx >= 0) bnState.watchlist.splice(idx, 1);
+  else bnState.watchlist.push(symbol);
+  localStorage.setItem('bn_watchlist', JSON.stringify(bnState.watchlist));
+}
+
+async function renderBnWatchlist() {
+  const container = document.getElementById('bn-watchlist-content');
+  if (bnState.watchlist.length === 0) {
+    container.innerHTML = '<div class="bn-hint">Takip listesi boş. Çift seçip ⭐ ile ekleyin.</div>';
+    return;
+  }
+  container.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Fiyatlar alınıyor...</p></div>';
+  const priceResult = await window.mailAPI.bnGetPrices(bnState.watchlist);
+  if (!priceResult.success) {
+    container.innerHTML = `<div class="bn-empty"><p>Hata: ${priceResult.error}</p></div>`;
+    return;
+  }
+  const priceMap = {};
+  priceResult.prices.forEach(p => { priceMap[p.symbol] = p.price; });
+  const pairs = bnState.watchlist.map(s => ({
+    symbol: s, price: priceMap[s] || '0', change: null, volume: null
+  }));
+  renderBnPairList(container, pairs);
+}
+
+// ---- Pair Detail ----
+document.getElementById('btn-bn-back').addEventListener('click', () => {
+  document.getElementById('bn-pair-detail').style.display = 'none';
+  document.querySelectorAll('.bn-tab-content').forEach(c => {
+    if (c.id === `bn-tc-${bnState.activeTab}`) c.classList.add('active');
+  });
+});
+
+document.getElementById('btn-bn-toggle-wl').addEventListener('click', () => {
+  if (!bnState.currentSymbol) return;
+  toggleBnWatchlist(bnState.currentSymbol);
+});
+
+async function showBnPair(symbol) {
+  bnState.currentSymbol = symbol;
+  document.querySelectorAll('.bn-tab-content').forEach(c => c.classList.remove('active'));
+  const detail = document.getElementById('bn-pair-detail');
+  detail.style.display = 'flex';
+
+  document.getElementById('bn-pair-title').textContent = symbol;
+  document.getElementById('bn-pair-body').innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Yükleniyor...</p></div>';
+  document.getElementById('bn-chart-table-wrap').innerHTML = '<p class="bn-hint">Periyot ve adet seçip "Veri Getir" butonuna tıklayın.</p>';
+  document.getElementById('bn-chart-canvas-wrap').style.display = 'none';
+  bnState.chartData = null;
+
+  const result = await window.mailAPI.bnGetTicker24(symbol);
+  const body = document.getElementById('bn-pair-body');
+
+  if (!result.success) {
+    body.innerHTML = `<div class="bn-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+
+  const t = result.ticker;
+  const price = parseFloat(t.lastPrice || 0);
+  const change = parseFloat(t.priceChangePercent || 0);
+  const changeClass = change >= 0 ? 'positive' : 'negative';
+  const changeSign = change >= 0 ? '+' : '';
+  const fN = (v) => v ? parseFloat(v).toLocaleString('tr-TR', {maximumFractionDigits: parseFloat(v) < 1 ? 8 : 4}) : '-';
+  const fB = (v) => v ? parseFloat(v).toLocaleString('tr-TR', {maximumFractionDigits: 0}) : '-';
+
+  const cards = [
+    { label: 'Son Fiyat', value: fN(t.lastPrice), cls: 'big' },
+    { label: 'Değişim (24s)', value: `${changeSign}${fN(t.priceChange)} (${changeSign}${change.toFixed(2)}%)`, cls: changeClass },
+    { label: 'Yüksek (24s)', value: fN(t.highPrice) },
+    { label: 'Düşük (24s)', value: fN(t.lowPrice) },
+    { label: 'Açılış', value: fN(t.openPrice) },
+    { label: 'Önceki Kapanış', value: fN(t.prevClosePrice) },
+    { label: 'Ağr. Ort. Fiyat', value: fN(t.weightedAvgPrice) },
+    { label: 'Hacim', value: fB(t.volume) },
+    { label: 'Kotasyon Hacmi', value: '$' + fB(t.quoteVolume) },
+    { label: 'İşlem Sayısı', value: t.count ? parseInt(t.count).toLocaleString('tr-TR') : '-' }
+  ];
+
+  document.getElementById('bn-pair-title').textContent = symbol;
+  body.innerHTML = cards.map(c => `
+    <div class="bn-pair-card">
+      <div class="bn-pair-card-label">${c.label}</div>
+      <div class="bn-pair-card-value ${c.cls || ''}">${c.value}</div>
+    </div>
+  `).join('');
+}
+
+// ---- Binance Chart ----
+document.getElementById('btn-bn-view-chart').addEventListener('click', () => {
+  bnState.chartView = 'chart';
+  document.getElementById('btn-bn-view-chart').classList.add('active');
+  document.getElementById('btn-bn-view-table').classList.remove('active');
+  if (bnState.chartData) {
+    document.getElementById('bn-chart-canvas-wrap').style.display = 'block';
+    document.getElementById('bn-chart-table-wrap').style.display = 'none';
+  }
+});
+
+document.getElementById('btn-bn-view-table').addEventListener('click', () => {
+  bnState.chartView = 'table';
+  document.getElementById('btn-bn-view-table').classList.add('active');
+  document.getElementById('btn-bn-view-chart').classList.remove('active');
+  if (bnState.chartData) {
+    document.getElementById('bn-chart-canvas-wrap').style.display = 'none';
+    document.getElementById('bn-chart-table-wrap').style.display = 'block';
+  }
+});
+
+function drawBnChart(klines) {
+  const canvas = document.getElementById('bn-chart-canvas');
+  const wrap = document.getElementById('bn-chart-canvas-wrap');
+  const ctx = canvas.getContext('2d');
+  const dpr = window.devicePixelRatio || 1;
+  const w = wrap.clientWidth - 32;
+  const h = 300;
+
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  ctx.scale(dpr, dpr);
+
+  const pad = { top: 24, right: 65, bottom: 44, left: 12 };
+  const cw = w - pad.left - pad.right;
+  const ch = h - pad.top - pad.bottom;
+
+  const closes = klines.map(k => parseFloat(k.close));
+  if (closes.length < 2) return;
+  const minVal = Math.min(...closes);
+  const maxVal = Math.max(...closes);
+  const range = maxVal - minVal || 1;
+
+  const first = closes[0];
+  const last = closes[closes.length - 1];
+  const isUp = last >= first;
+  const lineColor = isUp ? '#27ae60' : '#e74c3c';
+
+  ctx.clearRect(0, 0, w, h);
+
+  ctx.textAlign = 'left';
+  ctx.font = '10px system-ui, sans-serif';
+  for (let i = 0; i <= 5; i++) {
+    const y = pad.top + (ch / 5) * i;
+    ctx.strokeStyle = 'rgba(128,128,128,0.12)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad.left, y);
+    ctx.lineTo(w - pad.right, y);
+    ctx.stroke();
+    const val = maxVal - (range / 5) * i;
+    ctx.fillStyle = 'rgba(128,128,128,0.6)';
+    ctx.fillText(val.toLocaleString('tr-TR', { maximumFractionDigits: val < 1 ? 6 : 2 }), w - pad.right + 6, y + 4);
+  }
+
+  const labelCount = Math.min(7, klines.length);
+  const step = Math.max(1, Math.floor((klines.length - 1) / (labelCount - 1)));
+  ctx.textAlign = 'center';
+  for (let i = 0; i < klines.length; i += step) {
+    const x = pad.left + (i / (klines.length - 1)) * cw;
+    const d = new Date(klines[i].openTime);
+    const short = `${(d.getMonth()+1).toString().padStart(2,'0')}/${d.getDate().toString().padStart(2,'0')}`;
+    ctx.fillStyle = 'rgba(128,128,128,0.6)';
+    ctx.fillText(short, x, h - pad.bottom + 16);
+  }
+
+  const points = klines.map((k, i) => ({
+    x: pad.left + (i / (klines.length - 1)) * cw,
+    y: pad.top + (1 - (parseFloat(k.close) - minVal) / range) * ch
+  }));
+
+  const gradient = ctx.createLinearGradient(0, pad.top, 0, pad.top + ch);
+  gradient.addColorStop(0, lineColor + '50');
+  gradient.addColorStop(0.6, lineColor + '18');
+  gradient.addColorStop(1, lineColor + '00');
+
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1]; const curr = points[i];
+    ctx.bezierCurveTo((prev.x+curr.x)/2, prev.y, (prev.x+curr.x)/2, curr.y, curr.x, curr.y);
+  }
+  ctx.lineTo(points[points.length - 1].x, pad.top + ch);
+  ctx.lineTo(points[0].x, pad.top + ch);
+  ctx.closePath();
+  ctx.fillStyle = gradient;
+  ctx.fill();
+
+  ctx.beginPath();
+  ctx.moveTo(points[0].x, points[0].y);
+  for (let i = 1; i < points.length; i++) {
+    const prev = points[i - 1]; const curr = points[i];
+    ctx.bezierCurveTo((prev.x+curr.x)/2, prev.y, (prev.x+curr.x)/2, curr.y, curr.x, curr.y);
+  }
+  ctx.strokeStyle = lineColor;
+  ctx.lineWidth = 2.5;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+
+  const lp = points[points.length - 1];
+  ctx.beginPath();
+  ctx.arc(lp.x, lp.y, 5, 0, Math.PI * 2);
+  ctx.fillStyle = lineColor;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.fillStyle = lineColor;
+  ctx.font = 'bold 11px system-ui, sans-serif';
+  ctx.textAlign = 'left';
+  ctx.fillText(last.toLocaleString('tr-TR', { maximumFractionDigits: last < 1 ? 6 : 2 }), lp.x + 10, lp.y + 4);
+
+  const tooltip = document.getElementById('bn-chart-tooltip');
+  canvas.onmousemove = (e) => {
+    const rect = canvas.getBoundingClientRect();
+    const mx = (e.clientX - rect.left) * (canvas.width / dpr / rect.width);
+    if (mx < pad.left || mx > w - pad.right) { tooltip.style.display = 'none'; return; }
+    const ratio = (mx - pad.left) / cw;
+    const idx = Math.round(ratio * (klines.length - 1));
+    if (idx < 0 || idx >= klines.length) { tooltip.style.display = 'none'; return; }
+    const k = klines[idx];
+    const fN = (n) => parseFloat(n).toLocaleString('tr-TR', {maximumFractionDigits: parseFloat(n) < 1 ? 8 : 4});
+    const d = new Date(k.openTime);
+    tooltip.innerHTML = `<strong>${d.toLocaleString('tr-TR')}</strong><br>A: ${fN(k.open)} Y: ${fN(k.high)} D: ${fN(k.low)}<br><strong>K: ${fN(k.close)}</strong> H: ${parseFloat(k.volume).toLocaleString('tr-TR',{maximumFractionDigits:0})}`;
+    tooltip.style.display = 'block';
+    tooltip.style.left = Math.min(e.clientX - wrap.getBoundingClientRect().left + 12, w - 180) + 'px';
+    tooltip.style.top = (e.clientY - wrap.getBoundingClientRect().top - 60) + 'px';
+  };
+  canvas.onmouseleave = () => { tooltip.style.display = 'none'; };
+}
+
+document.getElementById('btn-bn-fetch-chart').addEventListener('click', async () => {
+  if (!bnState.currentSymbol) return;
+
+  const interval = document.getElementById('bn-chart-interval').value;
+  const limit = parseInt(document.getElementById('bn-chart-limit').value);
+  const canvasWrap = document.getElementById('bn-chart-canvas-wrap');
+  const tableWrap = document.getElementById('bn-chart-table-wrap');
+
+  canvasWrap.style.display = 'none';
+  tableWrap.innerHTML = '<div class="loading-state"><div class="loading-spinner"></div><p>Veri getiriliyor...</p></div>';
+  tableWrap.style.display = 'block';
+
+  const result = await window.mailAPI.bnGetKlines(bnState.currentSymbol, interval, limit);
+  if (!result.success) {
+    tableWrap.innerHTML = `<div class="bn-empty"><p>Hata: ${result.error}</p></div>`;
+    return;
+  }
+  if (!result.klines || result.klines.length === 0) {
+    tableWrap.innerHTML = '<div class="bn-empty"><p>Veri bulunamadı.</p></div>';
+    return;
+  }
+
+  const klines = result.klines;
+  bnState.chartData = klines;
+
+  let html = `<div class="bn-data-count">${klines.length} kayıt</div>`;
+  html += '<table class="bn-chart-table"><thead><tr>';
+  html += '<th>Tarih</th><th>Açılış</th><th>Yüksek</th><th>Düşük</th><th>Kapanış</th><th>Hacim</th><th>İşlem</th>';
+  html += '</tr></thead><tbody>';
+  klines.forEach(k => {
+    const c = parseFloat(k.close); const o = parseFloat(k.open);
+    const cls = c >= o ? 'bn-val-positive' : 'bn-val-negative';
+    const fN = (n) => parseFloat(n).toLocaleString('tr-TR', {maximumFractionDigits: parseFloat(n) < 1 ? 8 : 4});
+    const d = new Date(k.openTime);
+    html += `<tr><td>${d.toLocaleDateString('tr-TR')} ${d.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'})}</td>`;
+    html += `<td>${fN(k.open)}</td><td>${fN(k.high)}</td><td>${fN(k.low)}</td>`;
+    html += `<td class="${cls}">${fN(k.close)}</td>`;
+    html += `<td>${parseFloat(k.volume).toLocaleString('tr-TR',{maximumFractionDigits:0})}</td>`;
+    html += `<td>${k.trades ? parseInt(k.trades).toLocaleString('tr-TR') : '-'}</td></tr>`;
+  });
+  html += '</tbody></table>';
+  tableWrap.innerHTML = html;
+
+  canvasWrap.style.display = 'block';
+  drawBnChart(klines);
+
+  if (bnState.chartView === 'chart') {
+    canvasWrap.style.display = 'block';
+    tableWrap.style.display = 'none';
+  } else {
+    canvasWrap.style.display = 'none';
+    tableWrap.style.display = 'block';
+  }
+});
+
+// ============ Toolbar Ticker + Weather ============
+
+let tickerInterval = null;
+
+async function updateTickerRates() {
+  try {
+    const result = await window.mailAPI.getTickerRates();
+    if (result.success && result.rates) {
+      const r = result.rates;
+      const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+      if (r.USDTTRY) el('ticker-usdtry', parseFloat(r.USDTTRY).toFixed(2));
+      if (r.BTCUSDT) el('ticker-btc', '$' + parseFloat(r.BTCUSDT).toLocaleString('en-US', {maximumFractionDigits: 0}));
+      if (r.ETHUSDT) el('ticker-eth', '$' + parseFloat(r.ETHUSDT).toLocaleString('en-US', {maximumFractionDigits: 0}));
+      if (r.EURUSDT) el('ticker-eur', parseFloat(r.EURUSDT).toFixed(4));
+    }
+  } catch (e) { /* silent */ }
+}
+
+async function updateWeather() {
+  try {
+    const result = await window.mailAPI.getWeatherByCity('Istanbul');
+    if (result.success) {
+      const iconMap = {
+        '01d': '☀️', '01n': '🌙', '02d': '⛅', '02n': '☁️',
+        '03d': '☁️', '03n': '☁️', '04d': '☁️', '04n': '☁️',
+        '09d': '🌧️', '09n': '🌧️', '10d': '🌦️', '10n': '🌧️',
+        '11d': '⛈️', '11n': '⛈️', '13d': '❄️', '13n': '❄️',
+        '50d': '🌫️', '50n': '🌫️'
+      };
+      const icon = iconMap[result.icon] || '🌡️';
+      document.getElementById('ticker-weather-icon').textContent = icon;
+      document.getElementById('ticker-weather-text').textContent = `${result.city} ${result.temp}°C`;
+      document.getElementById('ticker-weather').title = `${result.city}: ${result.desc}, Hissedilen ${result.feelsLike}°C, Nem %${result.humidity}, Rüzgar ${result.wind} m/s`;
+    }
+  } catch (e) { /* silent */ }
+}
+
+function startTicker() {
+  updateTickerRates();
+  updateWeather();
+  tickerInterval = setInterval(updateTickerRates, 30000);
+  setInterval(updateWeather, 600000);
+}
+
+startTicker();
+
+// ============ API Keys Panel ============
+
+const apikeysOverlay = document.getElementById('apikeys-panel-overlay');
+const btnApiKeys = document.getElementById('btn-api-keys');
+const btnApiKeysClose = document.getElementById('btn-apikeys-close');
+const btnApiKeysSave = document.getElementById('btn-apikeys-save');
+
+btnApiKeys.addEventListener('click', openApiKeysPanel);
+btnApiKeysClose.addEventListener('click', closeApiKeysPanel);
+apikeysOverlay.addEventListener('click', (e) => {
+  if (e.target === apikeysOverlay) closeApiKeysPanel();
+});
+
+document.querySelectorAll('.apikey-toggle-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const input = document.getElementById(btn.dataset.target);
+    if (input) {
+      input.type = input.type === 'password' ? 'text' : 'password';
+    }
+  });
+});
+
+// External link handlers
+['apikeys-gh-link', 'apikeys-evds-link', 'apikeys-td-link', 'apikeys-gemini-link'].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) {
+    el.addEventListener('click', (e) => {
+      e.preventDefault();
+      const urls = {
+        'apikeys-gh-link': 'https://github.com/settings/tokens',
+        'apikeys-evds-link': 'https://evds2.tcmb.gov.tr/',
+        'apikeys-td-link': 'https://twelvedata.com/',
+        'apikeys-gemini-link': 'https://aistudio.google.com/apikey'
+      };
+      if (window.mailAPI.openExternal) window.mailAPI.openExternal(urls[id]);
+    });
+  }
+});
+
+async function openApiKeysPanel() {
+  apikeysOverlay.style.display = 'flex';
+  try {
+    const data = await window.mailAPI.getAllApiKeys();
+    const accountInfo = document.getElementById('apikeys-account-info');
+    accountInfo.textContent = data.activeEmail ? `📧 Aktif hesap: ${data.activeEmail}` : '⚠️ Aktif hesap yok';
+
+    const ghInput = document.getElementById('apikeys-github');
+    const evdsInput = document.getElementById('apikeys-evds');
+    const tdInput = document.getElementById('apikeys-td');
+    const geminiInput = document.getElementById('apikeys-gemini');
+
+    ghInput.value = data.github || '';
+    evdsInput.value = data.evds || '';
+    tdInput.value = data.twelveData || '';
+    geminiInput.value = data.geminiApiKey || '';
+
+    setKeyStatus('apikeys-github-status', data.github);
+    setKeyStatus('apikeys-evds-status', data.evds);
+    setKeyStatus('apikeys-td-status', data.twelveData);
+    setKeyStatus('apikeys-gemini-status', data.geminiApiKey);
+  } catch (err) {
+    console.error('API Keys panel load error:', err);
+  }
+}
+
+function setKeyStatus(elementId, value) {
+  const el = document.getElementById(elementId);
+  if (!el) return;
+  if (value) {
+    el.textContent = '✅ Anahtar kayıtlı';
+    el.className = 'apikey-status connected';
+  } else {
+    el.textContent = '⚪ Henüz girilmemiş';
+    el.className = 'apikey-status empty';
+  }
+}
+
+function closeApiKeysPanel() {
+  apikeysOverlay.style.display = 'none';
+  document.getElementById('apikeys-save-status').textContent = '';
+}
+
+btnApiKeysSave.addEventListener('click', async () => {
+  const statusEl = document.getElementById('apikeys-save-status');
+  try {
+    await window.mailAPI.saveAllApiKeys({
+      github: document.getElementById('apikeys-github').value.trim(),
+      evds: document.getElementById('apikeys-evds').value.trim(),
+      twelveData: document.getElementById('apikeys-td').value.trim(),
+      geminiApiKey: document.getElementById('apikeys-gemini').value.trim()
+    });
+    statusEl.textContent = '✅ Kaydedildi!';
+    setTimeout(() => { statusEl.textContent = ''; }, 2500);
+  } catch (err) {
+    statusEl.textContent = '❌ Hata: ' + err.message;
+  }
+});
+
+// ============ About / Features Panel ============
+
+const aboutOverlay = document.getElementById('about-panel-overlay');
+const btnAbout = document.getElementById('btn-about');
+const btnAboutClose = document.getElementById('btn-about-close');
+
+btnAbout.addEventListener('click', () => { aboutOverlay.style.display = 'flex'; });
+btnAboutClose.addEventListener('click', () => { aboutOverlay.style.display = 'none'; });
+aboutOverlay.addEventListener('click', (e) => {
+  if (e.target === aboutOverlay) aboutOverlay.style.display = 'none';
 });
 
 // ============ Gemini AI Settings ============

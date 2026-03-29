@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https: http: cid: blob:; script-src 'self' 'unsafe-inline'; frame-src *; media-src 'self' file:; connect-src https://www.googleapis.com https://accounts.google.com https://oauth2.googleapis.com https://generativelanguage.googleapis.com">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data: https: http: cid: blob:; script-src 'self' 'unsafe-inline'; frame-src *; media-src 'self' file:; connect-src https://www.googleapis.com https://accounts.google.com https://oauth2.googleapis.com https://generativelanguage.googleapis.com https://api.github.com https://raw.githubusercontent.com https://evds3.tcmb.gov.tr https://api.twelvedata.com https://query1.finance.yahoo.com https://query2.finance.yahoo.com https://fc.yahoo.com https://api.binance.com https://api.openweathermap.org">
   <title>MailLoader</title>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css">
@@ -192,12 +192,53 @@
         </nav>
 
         <div class="sidebar-divider"></div>
+        <div class="sidebar-category-label">Depo</div>
 
         <div class="folder-item" id="btn-drive-tab">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M12 2L2 19.5h20L12 2z"/><path d="M8.5 19.5L12 13l3.5 6.5"/><path d="M15.5 13H22l-3.5-6.5"/>
           </svg>
           <span>Google Drive</span>
+        </div>
+
+        <div class="folder-item" id="btn-github-tab">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/>
+          </svg>
+          <span>GitHub</span>
+        </div>
+
+        <div class="sidebar-divider"></div>
+        <div class="sidebar-category-label">Finans</div>
+
+        <div class="folder-item" id="btn-evds-tab">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v20M2 12h20"/><path d="M17 7l-5 5-5-5"/><rect x="3" y="3" width="18" height="18" rx="2"/>
+          </svg>
+          <span>TCMB EVDS</span>
+        </div>
+
+        <div class="folder-item" id="btn-td-tab">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/><circle cx="12" cy="12" r="1"/>
+          </svg>
+          <span>Twelve Data</span>
+        </div>
+
+        <div class="folder-item" id="btn-yf-tab">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3l8 8m0 0l8-8M11 11v10"/><circle cx="12" cy="21" r="1"/>
+          </svg>
+          <span>Yahoo Finance</span>
+        </div>
+
+        <div class="folder-item" id="btn-bn-tab">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/>
+            <polygon points="12 7 17 9.75 17 14.25 12 17 7 14.25 7 9.75 12 7"/>
+            <line x1="12" y1="12" x2="12" y2="12.01"/>
+          </svg>
+          <span>Binance</span>
         </div>
 
         <div class="sidebar-divider"></div>
@@ -268,6 +309,32 @@
               </svg>
             </button>
           </div>
+          <div class="toolbar-ticker" id="toolbar-ticker">
+            <div class="ticker-item" id="ticker-weather" title="Hava Durumu">
+              <span class="ticker-icon" id="ticker-weather-icon">🌡️</span>
+              <span class="ticker-label" id="ticker-weather-text">--</span>
+            </div>
+            <div class="ticker-divider"></div>
+            <div class="ticker-item" title="Dolar/TL (Binance USDT/TRY)">
+              <span class="ticker-label">$/₺</span>
+              <span class="ticker-value" id="ticker-usdtry">--</span>
+            </div>
+            <div class="ticker-divider"></div>
+            <div class="ticker-item" title="Bitcoin">
+              <span class="ticker-label">₿</span>
+              <span class="ticker-value" id="ticker-btc">--</span>
+            </div>
+            <div class="ticker-divider"></div>
+            <div class="ticker-item" title="Ethereum">
+              <span class="ticker-label">Ξ</span>
+              <span class="ticker-value" id="ticker-eth">--</span>
+            </div>
+            <div class="ticker-divider"></div>
+            <div class="ticker-item" title="EUR/USD">
+              <span class="ticker-label">€/$</span>
+              <span class="ticker-value" id="ticker-eur">--</span>
+            </div>
+          </div>
           <div class="toolbar-actions">
             <button class="toolbar-btn" id="btn-refresh" title="Yenile">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -286,6 +353,16 @@
             <button class="toolbar-btn" id="btn-settings" title="Ayarlar">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/>
+              </svg>
+            </button>
+            <button class="toolbar-btn" id="btn-api-keys" title="API Anahtarları">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+              </svg>
+            </button>
+            <button class="toolbar-btn" id="btn-about" title="Hakkında">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
               </svg>
             </button>
           </div>
@@ -655,6 +732,806 @@
           </div>
           <div class="drive-file-list" id="drive-file-list">
             <div class="loading-state"><div class="loading-spinner"></div><p>Dosyalar yükleniyor...</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GitHub Panel -->
+  <div class="drive-panel-overlay" id="github-panel-overlay" style="display:none;">
+    <div class="drive-panel github-panel-wide">
+      <div class="drive-panel-header">
+        <h3>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/>
+          </svg>
+          GitHub
+        </h3>
+        <div class="gh-header-user" id="gh-header-user" style="display:none;">
+          <img id="gh-user-avatar" class="gh-avatar-sm" src="" alt="">
+          <span id="gh-user-login"></span>
+        </div>
+        <button class="compose-close" id="btn-github-close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="drive-panel-body">
+        <!-- Not connected state -->
+        <div class="drive-not-connected" id="github-not-connected">
+          <div class="drive-setup-msg">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="1.5">
+              <path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0020 4.77 5.07 5.07 0 0019.91 1S18.73.65 16 2.48a13.38 13.38 0 00-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 005 4.77a5.44 5.44 0 00-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 009 18.13V22"/>
+            </svg>
+            <p>GitHub'a bağlanmak için <strong>Personal Access Token</strong> girin.</p>
+            <div class="github-token-form">
+              <div class="form-group" style="width:100%;margin-bottom:8px;">
+                <input type="password" id="github-token-input" placeholder="ghp_xxxxxxxxxxxx" style="width:100%;">
+              </div>
+              <button class="btn-primary" id="btn-github-connect" style="width:auto;padding:0 24px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
+                </svg>
+                Bağlan
+              </button>
+            </div>
+            <p style="font-size:11px;color:var(--text-tertiary);margin-top:8px;">
+              Token oluşturmak için: <strong>GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)</strong><br>
+              Gerekli izinler: <strong>repo, gist, delete_repo</strong>
+            </p>
+          </div>
+        </div>
+        <!-- Connected state -->
+        <div class="drive-connected" id="github-connected" style="display:none;">
+          <!-- Tabs -->
+          <div class="gh-tabs">
+            <button class="gh-tab active" data-tab="repos">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 00-.94-2.61c3.14-.35 6.44-1.54 6.44-7"/></svg>
+              Repolar
+            </button>
+            <button class="gh-tab" data-tab="issues">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+              Issues
+            </button>
+            <button class="gh-tab" data-tab="pulls">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 012 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>
+              Pull Requests
+            </button>
+            <button class="gh-tab" data-tab="commits">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><line x1="1.05" y1="12" x2="7" y2="12"/><line x1="17.01" y1="12" x2="22.96" y2="12"/></svg>
+              Commits
+            </button>
+            <button class="gh-tab" data-tab="branches">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 01-9 9"/></svg>
+              Branches
+            </button>
+            <button class="gh-tab" data-tab="gists">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              Gists
+            </button>
+            <button class="gh-tab" data-tab="starred">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+              Starred
+            </button>
+            <button class="gh-tab" data-tab="search">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              Ara
+            </button>
+          </div>
+
+          <!-- Toolbar -->
+          <div class="gh-toolbar">
+            <div class="drive-breadcrumb" id="github-breadcrumb">
+              <span class="drive-breadcrumb-item" id="github-go-repos">Repolar</span>
+            </div>
+            <div class="gh-toolbar-right">
+              <select class="gh-branch-select" id="gh-branch-select" style="display:none;"></select>
+              <button class="btn-secondary btn-sm gh-action-btn" id="btn-gh-new" title="Yeni">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              </button>
+              <button class="btn-secondary btn-sm" id="btn-github-refresh" title="Yenile">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                  <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                </svg>
+              </button>
+              <button class="btn-secondary btn-sm drive-disconnect-btn" id="btn-github-disconnect-panel" title="Bağlantıyı Kes">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Content Area -->
+          <div class="gh-content" id="gh-content">
+            <div class="loading-state"><div class="loading-spinner"></div><p>Yükleniyor...</p></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- GitHub Modal -->
+  <div class="gh-modal-overlay" id="gh-modal-overlay" style="display:none;">
+    <div class="gh-modal" id="gh-modal">
+      <div class="gh-modal-header">
+        <h4 id="gh-modal-title">Modal</h4>
+        <button class="compose-close" id="btn-gh-modal-close">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+      <div class="gh-modal-body" id="gh-modal-body"></div>
+    </div>
+  </div>
+
+  <!-- TCMB EVDS Panel -->
+  <div class="drive-panel-overlay" id="evds-panel-overlay" style="display:none;">
+    <div class="drive-panel github-panel-wide evds-panel-wide">
+      <div class="drive-panel-header evds-header">
+        <h3>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 2v20M2 12h20"/><path d="M17 7l-5 5-5-5"/><rect x="3" y="3" width="18" height="18" rx="2"/>
+          </svg>
+          TCMB EVDS
+        </h3>
+        <button class="compose-close" id="btn-evds-close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="drive-panel-body">
+        <!-- Not connected state -->
+        <div class="drive-not-connected" id="evds-not-connected">
+          <div class="drive-setup-msg">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="1.5">
+              <path d="M12 2v20M2 12h20"/><path d="M17 7l-5 5-5-5"/><rect x="3" y="3" width="18" height="18" rx="2"/>
+            </svg>
+            <p>TCMB EVDS verilerine erişmek için <strong>API Anahtarı</strong> girin.</p>
+            <div class="github-token-form">
+              <div class="form-group" style="width:100%;margin-bottom:8px;">
+                <input type="password" id="evds-api-key-input" placeholder="EVDS API Anahtarınız..." style="width:100%;">
+              </div>
+              <button class="btn-primary" id="btn-evds-connect" style="width:auto;padding:0 24px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
+                </svg>
+                Bağlan
+              </button>
+            </div>
+            <p style="font-size:11px;color:var(--text-tertiary);margin-top:8px;">
+              API anahtarı almak için: <strong>evds3.tcmb.gov.tr</strong> → Üye Ol → Profilim → API Anahtarı
+            </p>
+          </div>
+        </div>
+        <!-- Connected state -->
+        <div class="drive-connected" id="evds-connected" style="display:none;">
+          <!-- Breadcrumb & toolbar -->
+          <div class="evds-toolbar">
+            <div class="evds-breadcrumb" id="evds-breadcrumb">
+              <span class="evds-bc-item evds-bc-root" id="evds-go-categories">Kategoriler</span>
+            </div>
+            <div class="evds-toolbar-right">
+              <button class="btn-secondary btn-sm" id="btn-evds-refresh" title="Yenile">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                  <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                </svg>
+              </button>
+              <button class="btn-secondary btn-sm drive-disconnect-btn" id="btn-evds-disconnect-panel" title="Bağlantıyı Kes">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <!-- Content Area -->
+          <div class="evds-content" id="evds-content">
+            <div class="loading-state"><div class="loading-spinner"></div><p>Yükleniyor...</p></div>
+          </div>
+          <!-- Data viewer (hidden by default) -->
+          <div class="evds-data-viewer" id="evds-data-viewer" style="display:none;">
+            <div class="evds-data-controls">
+              <div class="evds-date-range">
+                <label>Başlangıç:</label>
+                <input type="date" id="evds-start-date" value="2020-01-01">
+                <label>Bitiş:</label>
+                <input type="date" id="evds-end-date">
+                <label>Frekans:</label>
+                <select id="evds-frequency">
+                  <option value="">Varsayılan</option>
+                  <option value="1">Günlük</option>
+                  <option value="2">İş Günü</option>
+                  <option value="3">Haftalık</option>
+                  <option value="4">İki Haftalık</option>
+                  <option value="5">Aylık</option>
+                  <option value="6">Üç Aylık</option>
+                  <option value="7">Altı Aylık</option>
+                  <option value="8">Yıllık</option>
+                </select>
+                <button class="btn-primary btn-sm" id="btn-evds-fetch-data">Veri Getir</button>
+              </div>
+            </div>
+            <div class="evds-data-table-wrap" id="evds-data-table-wrap">
+              <p class="evds-hint">Seri seçip "Veri Getir" butonuna tıklayın.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Twelve Data Panel -->
+  <div class="drive-panel-overlay" id="td-panel-overlay" style="display:none;">
+    <div class="drive-panel github-panel-wide td-panel-wide">
+      <div class="drive-panel-header td-header">
+        <h3>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/><circle cx="12" cy="12" r="1"/>
+          </svg>
+          Twelve Data
+        </h3>
+        <div class="td-usage-badge" id="td-usage-badge" style="display:none;" title="API Kullanımı"></div>
+        <button class="compose-close" id="btn-td-close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="drive-panel-body">
+        <!-- Not connected state -->
+        <div class="drive-not-connected" id="td-not-connected">
+          <div class="drive-setup-msg">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="1.5">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+            </svg>
+            <p>Piyasa verilerine erişmek için <strong>Twelve Data API Anahtarı</strong> girin.</p>
+            <div class="github-token-form">
+              <div class="form-group" style="width:100%;margin-bottom:8px;">
+                <input type="password" id="td-api-key-input" placeholder="Twelve Data API Anahtarınız..." style="width:100%;">
+              </div>
+              <button class="btn-primary" id="btn-td-connect" style="width:auto;padding:0 24px;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
+                </svg>
+                Bağlan
+              </button>
+            </div>
+            <p style="font-size:11px;color:var(--text-tertiary);margin-top:8px;">
+              API anahtarı almak için: <strong>twelvedata.com</strong> → Ücretsiz Kayıt → Dashboard → API Keys
+            </p>
+          </div>
+        </div>
+        <!-- Connected state -->
+        <div class="drive-connected" id="td-connected" style="display:none;">
+          <!-- Tabs -->
+          <div class="td-tabs">
+            <button class="td-tab active" data-tab="search">🔍 Arama</button>
+            <button class="td-tab" data-tab="stocks">📈 Hisseler</button>
+            <button class="td-tab" data-tab="forex">💱 Forex</button>
+            <button class="td-tab" data-tab="crypto">₿ Kripto</button>
+            <button class="td-tab" data-tab="watchlist">⭐ Takip Listesi</button>
+            <div class="td-tabs-right">
+              <button class="btn-secondary btn-sm" id="btn-td-refresh" title="Yenile">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                  <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+                </svg>
+              </button>
+              <button class="btn-secondary btn-sm drive-disconnect-btn" id="btn-td-disconnect-panel" title="Bağlantıyı Kes">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <!-- Search Tab -->
+          <div class="td-tab-content active" id="td-tab-search">
+            <div class="td-search-bar">
+              <input type="text" id="td-search-input" placeholder="Sembol veya şirket ara... (örn: AAPL, Tesla, EUR/USD)">
+              <button class="btn-primary btn-sm" id="btn-td-search">Ara</button>
+            </div>
+            <div class="td-search-results" id="td-search-results">
+              <div class="td-hint">Sembol veya şirket adı yazarak arama yapın.</div>
+            </div>
+          </div>
+          <!-- Stocks Tab -->
+          <div class="td-tab-content" id="td-tab-stocks">
+            <div class="td-search-bar">
+              <select id="td-stocks-exchange">
+                <option value="">Tüm Borsalar</option>
+                <option value="NYSE">NYSE</option>
+                <option value="NASDAQ">NASDAQ</option>
+                <option value="LSE">LSE</option>
+                <option value="TSE">TSE</option>
+                <option value="XIST">BIST (İstanbul)</option>
+              </select>
+              <button class="btn-primary btn-sm" id="btn-td-load-stocks">Yükle</button>
+            </div>
+            <div class="td-list-content" id="td-stocks-list">
+              <div class="td-hint">Borsa seçip "Yükle" butonuna tıklayın.</div>
+            </div>
+          </div>
+          <!-- Forex Tab -->
+          <div class="td-tab-content" id="td-tab-forex">
+            <div class="td-list-content" id="td-forex-list">
+              <div class="loading-state"><div class="loading-spinner"></div><p>Yükleniyor...</p></div>
+            </div>
+          </div>
+          <!-- Crypto Tab -->
+          <div class="td-tab-content" id="td-tab-crypto">
+            <div class="td-list-content" id="td-crypto-list">
+              <div class="loading-state"><div class="loading-spinner"></div><p>Yükleniyor...</p></div>
+            </div>
+          </div>
+          <!-- Watchlist Tab -->
+          <div class="td-tab-content" id="td-tab-watchlist">
+            <div class="td-watchlist-content" id="td-watchlist-content">
+              <div class="td-hint">Takip listesi boş. Sembol arayıp ⭐ ile ekleyin.</div>
+            </div>
+          </div>
+          <!-- Quote Detail (shown when clicking a symbol) -->
+          <div class="td-quote-detail" id="td-quote-detail" style="display:none;">
+            <div class="td-quote-header">
+              <button class="btn-secondary btn-sm" id="btn-td-back-to-list">← Geri</button>
+              <div class="td-quote-title" id="td-quote-title"></div>
+              <button class="btn-secondary btn-sm td-watchlist-toggle" id="btn-td-toggle-watchlist" title="Takip Listesine Ekle/Çıkar">⭐</button>
+            </div>
+            <div class="td-quote-body" id="td-quote-body">
+              <div class="loading-state"><div class="loading-spinner"></div><p>Yükleniyor...</p></div>
+            </div>
+            <!-- Time Series Controls -->
+            <div class="td-ts-controls">
+              <label>Periyot:</label>
+              <select id="td-ts-interval">
+                <option value="1day" selected>Günlük</option>
+                <option value="1week">Haftalık</option>
+                <option value="1month">Aylık</option>
+                <option value="1h">1 Saat</option>
+                <option value="4h">4 Saat</option>
+                <option value="15min">15 Dakika</option>
+              </select>
+              <label>Adet:</label>
+              <select id="td-ts-outputsize">
+                <option value="15">15</option>
+                <option value="30" selected>30</option>
+                <option value="50">50</option>
+                <option value="100">100</option>
+              </select>
+              <label>İndikatör:</label>
+              <select id="td-ts-indicator">
+                <option value="">Yok</option>
+                <option value="sma">SMA</option>
+                <option value="ema">EMA</option>
+                <option value="rsi">RSI</option>
+                <option value="macd">MACD</option>
+                <option value="bbands">Bollinger</option>
+                <option value="stoch">Stochastic</option>
+                <option value="adx">ADX</option>
+                <option value="atr">ATR</option>
+              </select>
+              <button class="btn-primary btn-sm" id="btn-td-fetch-ts">Veri Getir</button>
+            </div>
+            <div class="td-ts-table-wrap" id="td-ts-table-wrap">
+              <p class="td-hint">Periyot ve adet seçip "Veri Getir" butonuna tıklayın.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Yahoo Finance Panel -->
+  <div class="drive-panel-overlay" id="yf-panel-overlay" style="display:none;">
+    <div class="drive-panel github-panel-wide yf-panel-wide">
+      <div class="drive-panel-header yf-header">
+        <h3>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 3l8 8m0 0l8-8M11 11v10"/><circle cx="12" cy="21" r="1"/>
+          </svg>
+          Yahoo Finance
+        </h3>
+        <span class="yf-free-badge">Ücretsiz • Sınırsız</span>
+        <button class="compose-close" id="btn-yf-close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="drive-panel-body">
+        <!-- Connection test -->
+        <div class="drive-not-connected" id="yf-not-connected" style="display:none;">
+          <div class="drive-setup-msg">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--text-tertiary)" stroke-width="1.5">
+              <path d="M3 3l8 8m0 0l8-8M11 11v10"/>
+            </svg>
+            <p>Yahoo Finance'e bağlanılamıyor. İnternet bağlantınızı kontrol edin.</p>
+            <button class="btn-primary" id="btn-yf-retry">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/>
+                <path d="M3.51 9a9 9 0 0114.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0020.49 15"/>
+              </svg>
+              Tekrar Dene
+            </button>
+          </div>
+        </div>
+        <!-- Connected state -->
+        <div class="drive-connected" id="yf-connected" style="display:none;">
+          <!-- Tabs -->
+          <div class="yf-tabs">
+            <button class="yf-tab active" data-tab="yf-search">🔍 Arama</button>
+            <button class="yf-tab" data-tab="yf-watchlist">⭐ Takip Listesi</button>
+            <button class="yf-tab" data-tab="yf-popular">🔥 Popüler</button>
+          </div>
+          <!-- Search Tab -->
+          <div class="yf-tab-content active" id="yf-tc-yf-search">
+            <div class="yf-search-bar">
+              <input type="text" id="yf-search-input" placeholder="Sembol veya şirket ara... (örn: AAPL, THYAO.IS, BTC-USD)">
+              <button class="btn-primary btn-sm" id="btn-yf-search">Ara</button>
+            </div>
+            <div class="yf-results" id="yf-search-results">
+              <div class="yf-hint">Sembol veya şirket adı yazarak arama yapın.<br><small>BIST sembolleri: <strong>THYAO.IS, GARAN.IS, ASELS.IS</strong></small></div>
+            </div>
+          </div>
+          <!-- Watchlist Tab -->
+          <div class="yf-tab-content" id="yf-tc-yf-watchlist">
+            <div class="yf-results" id="yf-watchlist-content">
+              <div class="yf-hint">Takip listesi boş. Sembol arayıp ⭐ ile ekleyin.</div>
+            </div>
+          </div>
+          <!-- Popular Tab -->
+          <div class="yf-tab-content" id="yf-tc-yf-popular">
+            <div class="yf-popular-grid" id="yf-popular-grid">
+              <div class="loading-state"><div class="loading-spinner"></div><p>Yükleniyor...</p></div>
+            </div>
+          </div>
+          <!-- Quote Detail -->
+          <div class="yf-quote-detail" id="yf-quote-detail" style="display:none;">
+            <div class="yf-quote-header">
+              <button class="btn-secondary btn-sm" id="btn-yf-back">← Geri</button>
+              <div class="yf-quote-title" id="yf-quote-title"></div>
+              <button class="btn-secondary btn-sm" id="btn-yf-toggle-wl" title="Takip Et">⭐</button>
+            </div>
+            <div class="yf-quote-body" id="yf-quote-body">
+              <div class="loading-state"><div class="loading-spinner"></div><p>Yükleniyor...</p></div>
+            </div>
+            <!-- Chart controls -->
+            <div class="yf-chart-controls">
+              <label>Periyot:</label>
+              <select id="yf-chart-interval">
+                <option value="1d" selected>Günlük</option>
+                <option value="1wk">Haftalık</option>
+                <option value="1mo">Aylık</option>
+                <option value="1h">1 Saat</option>
+                <option value="15m">15 Dakika</option>
+                <option value="5m">5 Dakika</option>
+              </select>
+              <label>Aralık:</label>
+              <select id="yf-chart-range">
+                <option value="5d">5 Gün</option>
+                <option value="1mo" selected>1 Ay</option>
+                <option value="3mo">3 Ay</option>
+                <option value="6mo">6 Ay</option>
+                <option value="1y">1 Yıl</option>
+                <option value="2y">2 Yıl</option>
+                <option value="5y">5 Yıl</option>
+                <option value="max">Tümü</option>
+              </select>
+              <button class="btn-primary btn-sm" id="btn-yf-fetch-chart">Veri Getir</button>
+              <div class="yf-chart-view-toggle">
+                <button class="yf-chart-view-btn active" id="btn-yf-view-chart" title="Grafik">📈 Grafik</button>
+                <button class="yf-chart-view-btn" id="btn-yf-view-table" title="Tablo">📋 Tablo</button>
+              </div>
+            </div>
+            <div class="yf-chart-canvas-wrap" id="yf-chart-canvas-wrap" style="display:none;">
+              <canvas id="yf-chart-canvas"></canvas>
+              <div class="yf-chart-tooltip" id="yf-chart-tooltip"></div>
+            </div>
+            <div class="yf-chart-table-wrap" id="yf-chart-table-wrap">
+              <p class="yf-hint">Periyot ve aralık seçip "Veri Getir" butonuna tıklayın.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Binance Panel -->
+  <div class="drive-panel-overlay" id="bn-panel-overlay" style="display:none;">
+    <div class="drive-panel github-panel-wide bn-panel-wide">
+      <div class="drive-panel-header bn-header">
+        <h3>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 22 8.5 22 15.5 12 22 2 15.5 2 8.5 12 2"/>
+            <polygon points="12 7 17 9.75 17 14.25 12 17 7 14.25 7 9.75 12 7"/>
+          </svg>
+          Binance
+        </h3>
+        <span class="bn-free-badge">Ücretsiz • API Key Gerekmez</span>
+        <button class="compose-close" id="btn-bn-close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="drive-panel-body">
+        <div class="drive-not-connected" id="bn-not-connected" style="display:none;">
+          <div class="drive-not-connected-icon">🔌</div>
+          <h4>Binance API'ye bağlanılamadı</h4>
+          <p>İnternet bağlantınızı kontrol edin.</p>
+          <button class="btn-primary" id="btn-bn-retry">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"/><path d="M20.49 15A9 9 0 115.64 5.64L1 10"/>
+            </svg>
+            Tekrar Dene
+          </button>
+        </div>
+        <div class="drive-connected" id="bn-connected" style="display:none;">
+          <div class="bn-tabs">
+            <button class="bn-tab active" data-tab="bn-top">🔥 En Çok İşlem</button>
+            <button class="bn-tab" data-tab="bn-search">🔍 Arama</button>
+            <button class="bn-tab" data-tab="bn-watchlist">⭐ Takip</button>
+          </div>
+          <!-- Top Pairs Tab -->
+          <div class="bn-tab-content active" id="bn-tc-bn-top">
+            <div class="bn-results" id="bn-top-content">
+              <div class="loading-state"><div class="loading-spinner"></div><p>Yükleniyor...</p></div>
+            </div>
+          </div>
+          <!-- Search Tab -->
+          <div class="bn-tab-content" id="bn-tc-bn-search">
+            <div class="bn-search-bar">
+              <input type="text" id="bn-search-input" placeholder="Çift ara... (örn: BTC, ETH, SOL)">
+              <button class="btn-primary btn-sm" id="btn-bn-search">Ara</button>
+            </div>
+            <div class="bn-results" id="bn-search-results">
+              <div class="bn-hint">Arama yaparak kripto çifti bulun.</div>
+            </div>
+          </div>
+          <!-- Watchlist Tab -->
+          <div class="bn-tab-content" id="bn-tc-bn-watchlist">
+            <div class="bn-results" id="bn-watchlist-content">
+              <div class="bn-hint">Takip listesi boş. Çift seçip ⭐ ile ekleyin.</div>
+            </div>
+          </div>
+          <!-- Pair Detail -->
+          <div class="bn-pair-detail" id="bn-pair-detail" style="display:none;">
+            <div class="bn-pair-header">
+              <button class="btn-secondary btn-sm" id="btn-bn-back">← Geri</button>
+              <div class="bn-pair-title" id="bn-pair-title"></div>
+              <button class="btn-secondary btn-sm" id="btn-bn-toggle-wl" title="Takip Et">⭐</button>
+            </div>
+            <div class="bn-pair-body" id="bn-pair-body"></div>
+            <div class="bn-chart-controls">
+              <label>Periyot:</label>
+              <select id="bn-chart-interval">
+                <option value="1h" selected>1 Saat</option>
+                <option value="4h">4 Saat</option>
+                <option value="1d">1 Gün</option>
+                <option value="1w">1 Hafta</option>
+                <option value="15m">15 Dakika</option>
+                <option value="5m">5 Dakika</option>
+                <option value="1m">1 Dakika</option>
+              </select>
+              <label>Adet:</label>
+              <select id="bn-chart-limit">
+                <option value="50">50</option>
+                <option value="100" selected>100</option>
+                <option value="200">200</option>
+                <option value="500">500</option>
+              </select>
+              <button class="btn-primary btn-sm" id="btn-bn-fetch-chart">Veri Getir</button>
+              <div class="bn-chart-view-toggle">
+                <button class="bn-chart-view-btn active" id="btn-bn-view-chart">📈 Grafik</button>
+                <button class="bn-chart-view-btn" id="btn-bn-view-table">📋 Tablo</button>
+              </div>
+            </div>
+            <div class="bn-chart-canvas-wrap" id="bn-chart-canvas-wrap" style="display:none;">
+              <canvas id="bn-chart-canvas"></canvas>
+              <div class="bn-chart-tooltip" id="bn-chart-tooltip"></div>
+            </div>
+            <div class="bn-chart-table-wrap" id="bn-chart-table-wrap">
+              <p class="bn-hint">Periyot ve adet seçip "Veri Getir" butonuna tıklayın.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- API Keys Panel -->
+  <div class="settings-panel-overlay" id="apikeys-panel-overlay" style="display:none;">
+    <div class="settings-panel apikeys-panel">
+      <div class="settings-panel-header apikeys-header">
+        <h3>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.778 7.778 5.5 5.5 0 017.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/>
+          </svg>
+          API Anahtarları
+        </h3>
+        <button class="compose-close" id="btn-apikeys-close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="settings-panel-body">
+        <div class="apikeys-account-info" id="apikeys-account-info"></div>
+
+        <div class="settings-section">
+          <h4>🔑 GitHub Personal Access Token</h4>
+          <p class="settings-hint">GitHub entegrasyonu için gerekli. <a href="#" id="apikeys-gh-link">github.com/settings/tokens</a> adresinden oluşturun.</p>
+          <div class="form-group">
+            <div class="apikey-input-row">
+              <input type="password" id="apikeys-github" placeholder="ghp_xxxxxxxxxxxx" class="form-input">
+              <button class="apikey-toggle-btn" data-target="apikeys-github" title="Göster/Gizle">👁️</button>
+            </div>
+            <div class="apikey-status" id="apikeys-github-status"></div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h4>🏦 TCMB EVDS API Anahtarı</h4>
+          <p class="settings-hint">TCMB verileri için gerekli. <a href="#" id="apikeys-evds-link">evds2.tcmb.gov.tr</a> adresinden alın.</p>
+          <div class="form-group">
+            <div class="apikey-input-row">
+              <input type="password" id="apikeys-evds" placeholder="EVDS API anahtarı" class="form-input">
+              <button class="apikey-toggle-btn" data-target="apikeys-evds" title="Göster/Gizle">👁️</button>
+            </div>
+            <div class="apikey-status" id="apikeys-evds-status"></div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h4>📈 Twelve Data API Anahtarı</h4>
+          <p class="settings-hint">Borsa verileri için. <a href="#" id="apikeys-td-link">twelvedata.com</a> adresinden ücretsiz alın.</p>
+          <div class="form-group">
+            <div class="apikey-input-row">
+              <input type="password" id="apikeys-td" placeholder="Twelve Data API anahtarı" class="form-input">
+              <button class="apikey-toggle-btn" data-target="apikeys-td" title="Göster/Gizle">👁️</button>
+            </div>
+            <div class="apikey-status" id="apikeys-td-status"></div>
+          </div>
+        </div>
+
+        <div class="settings-section">
+          <h4>🤖 Gemini AI API Anahtarı</h4>
+          <p class="settings-hint">Yapay zeka özellikleri için. <a href="#" id="apikeys-gemini-link">aistudio.google.com/apikey</a> adresinden alın.</p>
+          <div class="form-group">
+            <div class="apikey-input-row">
+              <input type="password" id="apikeys-gemini" placeholder="Gemini API anahtarı" class="form-input">
+              <button class="apikey-toggle-btn" data-target="apikeys-gemini" title="Göster/Gizle">👁️</button>
+            </div>
+            <div class="apikey-status" id="apikeys-gemini-status"></div>
+          </div>
+        </div>
+
+        <div class="settings-section apikeys-free-section">
+          <h4>✅ API Anahtarı Gerektirmeyen Servisler</h4>
+          <div class="apikeys-free-list">
+            <div class="apikeys-free-item">
+              <span class="apikeys-free-icon">📧</span>
+              <div><strong>Google Drive</strong><div class="apikeys-free-desc">OAuth2 ile otomatik bağlantı</div></div>
+            </div>
+            <div class="apikeys-free-item">
+              <span class="apikeys-free-icon">📊</span>
+              <div><strong>Yahoo Finance</strong><div class="apikeys-free-desc">Ücretsiz, sınırsız • Cookie/Crumb auth</div></div>
+            </div>
+            <div class="apikeys-free-item">
+              <span class="apikeys-free-icon">💰</span>
+              <div><strong>Binance</strong><div class="apikeys-free-desc">Ücretsiz, API key gerekmez</div></div>
+            </div>
+            <div class="apikeys-free-item">
+              <span class="apikeys-free-icon">🌤️</span>
+              <div><strong>OpenWeather</strong><div class="apikeys-free-desc">Dahili • Hava durumu widget</div></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="apikeys-save-row">
+          <button class="btn-primary" id="btn-apikeys-save">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            Kaydet
+          </button>
+          <span class="apikeys-save-status" id="apikeys-save-status"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- About / Features Panel -->
+  <div class="settings-panel-overlay" id="about-panel-overlay" style="display:none;">
+    <div class="settings-panel about-panel">
+      <div class="settings-panel-header about-header">
+        <h3>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
+          </svg>
+          MailLoader — Özellikler
+        </h3>
+        <button class="compose-close" id="btn-about-close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+          </svg>
+        </button>
+      </div>
+      <div class="settings-panel-body about-body">
+        <div class="about-logo-section">
+          <div class="about-app-name">📬 MailLoader</div>
+          <div class="about-version">v1.0.2</div>
+          <div class="about-desc">Gelişmiş masaüstü e-posta istemcisi — finans, depo ve yapay zeka entegrasyonları ile</div>
+        </div>
+
+        <div class="about-category">
+          <div class="about-cat-title">📧 E-posta</div>
+          <div class="about-features">
+            <div class="about-feat">IMAP/SMTP çoklu hesap desteği</div>
+            <div class="about-feat">Zengin metin editörü (bold, italic, liste, renk)</div>
+            <div class="about-feat">Dosya ekleri ve inline görseller</div>
+            <div class="about-feat">E-posta arama ve filtreleme</div>
+            <div class="about-feat">Taslak, yıldızlı, spam yönetimi</div>
+            <div class="about-feat">Toplu seçim ve işlemler</div>
+            <div class="about-feat">Masaüstü bildirimleri + ses</div>
+            <div class="about-feat">Hızlı yanıt şablonları</div>
+            <div class="about-feat">Kişi defteri</div>
+          </div>
+        </div>
+
+        <div class="about-category">
+          <div class="about-cat-title">📁 Depo Entegrasyonları</div>
+          <div class="about-features">
+            <div class="about-feat"><strong>Google Drive</strong> — Dosya listeleme, yükleme, indirme, silme, paylaşım</div>
+            <div class="about-feat"><strong>GitHub</strong> — 33+ özellik: repo, issue, PR, commit, branch, release, gist, profil, org, activity, star, fork</div>
+          </div>
+        </div>
+
+        <div class="about-category">
+          <div class="about-cat-title">💹 Finans Entegrasyonları</div>
+          <div class="about-features">
+            <div class="about-feat"><strong>TCMB EVDS</strong> — Döviz kurları, faiz, enflasyon, makro veriler</div>
+            <div class="about-feat"><strong>Twelve Data</strong> — Hisse, forex, kripto, teknik göstergeler</div>
+            <div class="about-feat"><strong>Yahoo Finance</strong> — Ücretsiz, BIST dahil tüm borsalar, OHLCV grafik</div>
+            <div class="about-feat"><strong>Binance</strong> — Kripto fiyatları, 24s ticker, kline grafik, API key gerekmez</div>
+            <div class="about-feat"><strong>OpenWeather</strong> — Toolbar'da anlık hava durumu</div>
+            <div class="about-feat"><strong>Canlı Ticker</strong> — USD/TRY, BTC, ETH, EUR/USD anlık toolbar</div>
+          </div>
+        </div>
+
+        <div class="about-category">
+          <div class="about-cat-title">🤖 Yapay Zeka</div>
+          <div class="about-features">
+            <div class="about-feat"><strong>Gemini AI</strong> — E-posta çevirisi, özetleme, akıllı yanıt, serbest sohbet</div>
+          </div>
+        </div>
+
+        <div class="about-category">
+          <div class="about-cat-title">🎨 Arayüz & Tema</div>
+          <div class="about-features">
+            <div class="about-feat">Açık / Koyu / Auto tema</div>
+            <div class="about-feat">10+ renk paleti (accent color)</div>
+            <div class="about-feat">Cam efekti (glass/blur) desteği</div>
+            <div class="about-feat">Sıvı animasyon arka plan</div>
+            <div class="about-feat">Özelleştirilebilir logo</div>
+            <div class="about-feat">Arka plan resmi desteği</div>
+          </div>
+        </div>
+
+        <div class="about-category">
+          <div class="about-cat-title">⚙️ Kullanılan Teknolojiler</div>
+          <div class="about-tech-grid">
+            <div class="about-tech"><span class="about-tech-icon">⚛️</span>Electron 28</div>
+            <div class="about-tech"><span class="about-tech-icon">📦</span>Node.js</div>
+            <div class="about-tech"><span class="about-tech-icon">🔒</span>electron-store</div>
+            <div class="about-tech"><span class="about-tech-icon">📧</span>IMAP / SMTP</div>
+            <div class="about-tech"><span class="about-tech-icon">🔑</span>Google OAuth2</div>
+            <div class="about-tech"><span class="about-tech-icon">🌐</span>REST APIs</div>
+            <div class="about-tech"><span class="about-tech-icon">📊</span>Canvas Charts</div>
+            <div class="about-tech"><span class="about-tech-icon">🎨</span>CSS Variables</div>
+            <div class="about-tech"><span class="about-tech-icon">🔧</span>electron-builder</div>
+            <div class="about-tech"><span class="about-tech-icon">💎</span>IPC Bridge</div>
           </div>
         </div>
       </div>
