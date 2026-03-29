@@ -15,7 +15,7 @@
 
 > Geliştirici değilseniz — sadece programı kullanmak istiyorsanız:
 
-1. `dist` klasöründeki **`MailLoader Setup 1.0.2.exe`** dosyasına çift tıklayın bulamazsanız direkt ** https://drive.google.com/file/d/1wE7bYj3B1DauAfTqbVO42wMNKG4mQrq0/view?usp=sharing ** linki ile indirebilirsiniz. 
+1. `dist` klasöründeki **`MailLoader Setup 1.0.2.exe`** dosyasına çift tıklayın bulamazsanız direkt ** https://drive.google.com/file/d/1rEfdZyMVjf-97YZ9NsY8797N3eNednxs/view?usp=sharing ** linki ile indirebilirsiniz. 
 2. Kurulum sihirbazını takip edin, kurulum klasörünü seçin
 3. **Kur** butonuna basın — kurulum 30 saniyede tamamlanır
 4. Masaüstündeki **MailLoader** ikonuna çift tıklayıp açın
